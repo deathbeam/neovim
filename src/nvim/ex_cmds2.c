@@ -17,6 +17,7 @@
 #include "nvim/bufwrite.h"
 #include "nvim/change.h"
 #include "nvim/channel.h"
+#include "nvim/errors.h"
 #include "nvim/eval.h"
 #include "nvim/eval/typval.h"
 #include "nvim/eval/typval_defs.h"
@@ -212,10 +213,24 @@ void dialog_changed(buf_T *buf, bool checkall)
   }
 
   if (ret == VIM_YES) {
-    if (buf->b_fname != NULL
-        && check_overwrite(&ea, buf, buf->b_fname, buf->b_ffname, false) == OK) {
+    bool empty_bufname = buf->b_fname == NULL;
+    if (empty_bufname) {
+      buf_set_name(buf->b_fnum, "Untitled");
+    }
+
+    if (check_overwrite(&ea, buf, buf->b_fname, buf->b_ffname, false) == OK) {
       // didn't hit Cancel
-      buf_write_all(buf, false);
+      if (buf_write_all(buf, false) == OK) {
+        return;
+      }
+    }
+
+    // restore to empty when write failed
+    if (empty_bufname) {
+      XFREE_CLEAR(buf->b_fname);
+      XFREE_CLEAR(buf->b_ffname);
+      XFREE_CLEAR(buf->b_sfname);
+      unchanged(buf, true, false);
     }
   } else if (ret == VIM_NO) {
     unchanged(buf, true, false);
@@ -606,7 +621,7 @@ void ex_listdo(exarg_T *eap)
       i++;
       // execute the command
       if (execute) {
-        do_cmdline(eap->arg, eap->getline, eap->cookie, DOCMD_VERBOSE + DOCMD_NOWAIT);
+        do_cmdline(eap->arg, eap->ea_getline, eap->cookie, DOCMD_VERBOSE + DOCMD_NOWAIT);
       }
 
       if (eap->cmdidx == CMD_bufdo) {

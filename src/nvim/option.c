@@ -44,6 +44,7 @@
 #include "nvim/decoration_provider.h"
 #include "nvim/diff.h"
 #include "nvim/drawscreen.h"
+#include "nvim/errors.h"
 #include "nvim/eval.h"
 #include "nvim/eval/typval.h"
 #include "nvim/eval/vars.h"
@@ -235,11 +236,11 @@ static void set_init_default_backupskip(void)
           == NULL) {
         ga_grow(&ga, (int)len);
         if (!GA_EMPTY(&ga)) {
-          STRCAT(ga.ga_data, ",");
+          strcat(ga.ga_data, ",");
         }
-        STRCAT(ga.ga_data, p);
+        strcat(ga.ga_data, p);
         add_pathsep(ga.ga_data);
-        STRCAT(ga.ga_data, "*");
+        strcat(ga.ga_data, "*");
         ga.ga_len += (int)len;
       }
       xfree(item);
@@ -2244,7 +2245,7 @@ static const char *did_set_modified(optset_T *args)
     save_file_ff(buf);  // Buffer is unchanged
   }
   redraw_titles();
-  modified_was_set = (int)args->os_newval.boolean;
+  buf->b_modified_was_set = (int)args->os_newval.boolean;
   return NULL;
 }
 
@@ -2898,8 +2899,6 @@ static const char *validate_num_option(OptIndex opt_idx, void *varp, OptInt *new
     } else if (value > p_wiw) {
       return e_winwidth;
     }
-  } else if (varp == &p_mco) {
-    *newval = MAX_MCO;
   } else if (varp == &p_titlelen) {
     if (value < 0) {
       return e_positive;
@@ -3483,8 +3482,8 @@ static const char *did_set_option(OptIndex opt_idx, void *varp, OptVal old_value
     .os_win = curwin
   };
 
-  if (direct) {
-    // Don't do any extra processing if setting directly.
+  if (direct || opt->hidden) {
+    // Don't do any extra processing if setting directly or if option is hidden.
   }
   // Disallow changing immutable options.
   else if (opt->immutable && !optval_equal(old_value, new_value)) {
@@ -3511,8 +3510,9 @@ static const char *did_set_option(OptIndex opt_idx, void *varp, OptVal old_value
     restore_chartab = did_set_cb_args.os_restore_chartab;
   }
 
-  // If an error is detected, restore the previous value and don't do any further processing.
-  if (errmsg != NULL) {
+  // If option is hidden or if an error is detected, restore the previous value and don't do any
+  // further processing.
+  if (opt->hidden || errmsg != NULL) {
     set_option_varp(opt_idx, varp, old_value, true);
     // When resetting some values, need to act on it.
     if (restore_chartab) {
@@ -4227,7 +4227,7 @@ static int optval_default(OptIndex opt_idx, void *varp)
   vimoption_T *opt = &options[opt_idx];
 
   // Hidden or immutable options always use their default value.
-  if (varp == NULL || opt->immutable) {
+  if (varp == NULL || opt->hidden || opt->immutable) {
     return true;
   }
 
@@ -4570,6 +4570,8 @@ void *get_varp_scope_from(vimoption_T *p, int scope, buf_T *buf, win_T *win)
       return &(buf->b_p_def);
     case PV_INC:
       return &(buf->b_p_inc);
+    case PV_COT:
+      return &(buf->b_p_cot);
     case PV_DICT:
       return &(buf->b_p_dict);
     case PV_TSR:
@@ -4653,6 +4655,8 @@ void *get_varp_from(vimoption_T *p, buf_T *buf, win_T *win)
     return *buf->b_p_def != NUL ? &(buf->b_p_def) : p->var;
   case PV_INC:
     return *buf->b_p_inc != NUL ? &(buf->b_p_inc) : p->var;
+  case PV_COT:
+    return *buf->b_p_cot != NUL ? &(buf->b_p_cot) : p->var;
   case PV_DICT:
     return *buf->b_p_dict != NUL ? &(buf->b_p_dict) : p->var;
   case PV_TSR:
@@ -5332,6 +5336,8 @@ void buf_copy_options(buf_T *buf, int flags)
       buf->b_p_inc = empty_string_option;
       buf->b_p_inex = xstrdup(p_inex);
       COPY_OPT_SCTX(buf, BV_INEX);
+      buf->b_p_cot = empty_string_option;
+      buf->b_cot_flags = 0;
       buf->b_p_dict = empty_string_option;
       buf->b_p_tsr = empty_string_option;
       buf->b_p_tsrfu = empty_string_option;
@@ -6186,10 +6192,10 @@ bool can_bs(int what)
   return vim_strchr(p_bs, what) != NULL;
 }
 
-/// Get the local or global value of 'backupcopy'.
+/// Get the local or global value of 'backupcopy' flags.
 ///
 /// @param buf The buffer.
-unsigned get_bkc_value(buf_T *buf)
+unsigned get_bkc_flags(buf_T *buf)
 {
   return buf->b_bkc_flags ? buf->b_bkc_flags : bkc_flags;
 }
@@ -6205,7 +6211,7 @@ char *get_flp_value(buf_T *buf)
   return buf->b_p_flp;
 }
 
-/// Get the local or global value of the 'virtualedit' flags.
+/// Get the local or global value of 'virtualedit' flags.
 unsigned get_ve_flags(win_T *wp)
 {
   return (wp->w_ve_flags ? wp->w_ve_flags : ve_flags) & ~(VE_NONE | VE_NONEU);

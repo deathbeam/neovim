@@ -37,7 +37,7 @@ local validate = vim.validate
 --- `is_closing` and `terminate`.
 --- See |vim.lsp.rpc.request()|, |vim.lsp.rpc.notify()|.
 ---  For TCP there is a builtin RPC client factory: |vim.lsp.rpc.connect()|
---- @field cmd string[]|fun(dispatchers: vim.lsp.rpc.Dispatchers): vim.lsp.rpc.PublicClient?
+--- @field cmd string[]|fun(dispatchers: vim.lsp.rpc.Dispatchers): vim.lsp.rpc.PublicClient
 ---
 --- Directory to launch the `cmd` process. Not related to `root_dir`.
 --- (default: cwd)
@@ -182,9 +182,13 @@ local validate = vim.validate
 --- It can be `null` if the client supports workspace folders but none are
 --- configured.
 --- @field workspace_folders lsp.WorkspaceFolder[]?
---- @field root_dir string
+--- @field root_dir string?
 ---
 --- @field attached_buffers table<integer,true>
+---
+--- Buffers that should be attached to upon initialize()
+--- @field package _buffers_to_attach table<integer,true>
+---
 --- @field private _log_prefix string
 ---
 --- Track this so that we can escalate automatically if we've already tried a
@@ -225,7 +229,7 @@ local validate = vim.validate
 --- If {status} is `true`, the function returns {request_id} as the second
 --- result. You can use this with `client.cancel_request(request_id)` to cancel
 --- the request.
---- @field request fun(method: string, params: table?, handler: lsp.Handler?, bufnr: integer): boolean, integer?
+--- @field request fun(method: string, params: table?, handler: lsp.Handler?, bufnr: integer?): boolean, integer?
 ---
 --- Sends a request to the server and synchronously waits for the response.
 --- This is a wrapper around {client.request}
@@ -416,7 +420,7 @@ local function get_workspace_folders(workspace_folders, root_dir)
     return {
       {
         uri = vim.uri_from_fname(root_dir),
-        name = string.format('%s', root_dir),
+        name = root_dir,
       },
     }
   end
@@ -432,7 +436,7 @@ local function ensure_list(x)
   return { x }
 end
 
---- @package
+--- @nodoc
 --- @param config vim.lsp.ClientConfig
 --- @return vim.lsp.Client?
 function Client.create(config)
@@ -466,7 +470,6 @@ function Client.create(config)
     _on_exit_cbs = ensure_list(config.on_exit),
     _on_attach_cbs = ensure_list(config.on_attach),
     _on_error_cb = config.on_error,
-    _root_dir = config.root_dir,
     _trace = get_trace(config.trace),
 
     --- Contains $/progress report messages.
@@ -502,24 +505,16 @@ function Client.create(config)
   }
 
   -- Start the RPC client.
-  local rpc --- @type vim.lsp.rpc.PublicClient?
   local config_cmd = config.cmd
   if type(config_cmd) == 'function' then
-    rpc = config_cmd(dispatchers)
+    self.rpc = config_cmd(dispatchers)
   else
-    rpc = lsp.rpc.start(config_cmd, dispatchers, {
+    self.rpc = lsp.rpc.start(config_cmd, dispatchers, {
       cwd = config.cmd_cwd,
       env = config.cmd_env,
       detached = config.detached,
     })
   end
-
-  -- Return nil if the rpc client fails to start
-  if not rpc then
-    return
-  end
-
-  self.rpc = rpc
 
   setmetatable(self, Client)
 
@@ -540,7 +535,7 @@ function Client:_run_callbacks(cbs, error_id, ...)
   end
 end
 
---- @package
+--- @nodoc
 function Client:initialize()
   local config = self.config
 
@@ -575,6 +570,7 @@ function Client:initialize()
     initializationOptions = config.init_options,
     capabilities = self.capabilities,
     trace = self._trace,
+    workDoneToken = '1',
   }
 
   self:_run_callbacks(
@@ -608,7 +604,18 @@ function Client:initialize()
       self:_notify(ms.workspace_didChangeConfiguration, { settings = self.settings })
     end
 
+    -- If server is being restarted, make sure to re-attach to any previously attached buffers.
+    -- Save which buffers before on_init in case new buffers are attached.
+    local reattach_bufs = vim.deepcopy(self.attached_buffers)
+
     self:_run_callbacks(self._on_init_cbs, lsp.client_errors.ON_INIT_CALLBACK_ERROR, self, result)
+
+    for buf in pairs(reattach_bufs) do
+      -- The buffer may have been detached in the on_init callback.
+      if self.attached_buffers[buf] then
+        self:_on_attach(buf)
+      end
+    end
 
     log.info(
       self._log_prefix,
@@ -647,10 +654,10 @@ end
 --- checks for capabilities and handler availability.
 ---
 --- @param method string LSP method name.
---- @param params table|nil LSP request params.
---- @param handler lsp.Handler|nil Response |lsp-handler| for this method.
+--- @param params? table LSP request params.
+--- @param handler? lsp.Handler Response |lsp-handler| for this method.
 --- @param bufnr integer Buffer handle (0 for current).
---- @return boolean status, integer|nil request_id {status} is a bool indicating
+--- @return boolean status, integer? request_id {status} is a bool indicating
 --- whether the request was successful. If it is `false`, then it will
 --- always be `false` (the client has shutdown). If it was
 --- successful, then it will return {request_id} as the
@@ -709,7 +716,7 @@ local wait_result_reason = { [-1] = 'timeout', [-2] = 'interrupted', [-3] = 'err
 ---
 --- @param ... string List to write to the buffer
 local function err_message(...)
-  local message = table.concat(vim.tbl_flatten({ ... }))
+  local message = table.concat(vim.iter({ ... }):flatten():totable())
   if vim.in_fast_event() then
     vim.schedule(function()
       api.nvim_err_writeln(message)
@@ -761,7 +768,7 @@ function Client:_request_sync(method, params, timeout_ms, bufnr)
   return request_result
 end
 
---- @private
+--- @package
 --- Sends a notification to an LSP server.
 ---
 --- @param method string LSP method name.
@@ -854,14 +861,14 @@ function Client:_is_stopped()
   return self.rpc.is_closing()
 end
 
---- @package
 --- Execute a lsp command, either via client command function (if available)
 --- or via workspace/executeCommand (if supported by the server)
 ---
 --- @param command lsp.Command
 --- @param context? {bufnr: integer}
 --- @param handler? lsp.Handler only called if a server command
-function Client:_exec_cmd(command, context, handler)
+--- @param on_unsupported? function handler invoked when the command is not supported by the client.
+function Client:_exec_cmd(command, context, handler, on_unsupported)
   context = vim.deepcopy(context or {}, true) --[[@as lsp.HandlerContext]]
   context.bufnr = context.bufnr or api.nvim_get_current_buf()
   context.client_id = self.id
@@ -875,14 +882,18 @@ function Client:_exec_cmd(command, context, handler)
   local command_provider = self.server_capabilities.executeCommandProvider
   local commands = type(command_provider) == 'table' and command_provider.commands or {}
   if not vim.list_contains(commands, cmdname) then
-    vim.notify_once(
-      string.format(
-        'Language server `%s` does not support command `%s`. This command may require a client extension.',
-        self.name,
-        cmdname
-      ),
-      vim.log.levels.WARN
-    )
+    if on_unsupported then
+      on_unsupported()
+    else
+      vim.notify_once(
+        string.format(
+          'Language server `%s` does not support command `%s`. This command may require a client extension.',
+          self.name,
+          cmdname
+        ),
+        vim.log.levels.WARN
+      )
+    end
     return
   end
   -- Not using command directly to exclude extra properties,
@@ -894,30 +905,27 @@ function Client:_exec_cmd(command, context, handler)
   self.request(ms.workspace_executeCommand, params, handler, context.bufnr)
 end
 
---- @package
 --- Default handler for the 'textDocument/didOpen' LSP notification.
 ---
 --- @param bufnr integer Number of the buffer, or 0 for current
 function Client:_text_document_did_open_handler(bufnr)
   changetracking.init(self, bufnr)
-  if not vim.tbl_get(self.server_capabilities, 'textDocumentSync', 'openClose') then
+  if not self.supports_method(ms.textDocument_didOpen) then
     return
   end
   if not api.nvim_buf_is_loaded(bufnr) then
     return
   end
-  local filetype = vim.bo[bufnr].filetype
 
-  local params = {
+  local filetype = vim.bo[bufnr].filetype
+  self.notify(ms.textDocument_didOpen, {
     textDocument = {
-      version = 0,
+      version = lsp.util.buf_versions[bufnr],
       uri = vim.uri_from_bufnr(bufnr),
       languageId = self.get_language_id(bufnr, filetype),
       text = lsp._buf_get_full_text(bufnr),
     },
-  }
-  self.notify(ms.textDocument_didOpen, params)
-  lsp.util.buf_versions[bufnr] = params.textDocument.version
+  })
 
   -- Next chance we get, we should re-do the diagnostics
   vim.schedule(function()
@@ -930,7 +938,6 @@ function Client:_text_document_did_open_handler(bufnr)
   end)
 end
 
---- @package
 --- Runs the on_attach function from the client's config if it was defined.
 --- @param bufnr integer Buffer number
 function Client:_on_attach(bufnr)
@@ -1051,6 +1058,45 @@ function Client:_on_exit(code, signal)
     signal,
     self.id
   )
+end
+
+--- Add a directory to the workspace folders.
+--- @param dir string?
+function Client:_add_workspace_folder(dir)
+  for _, folder in pairs(self.workspace_folders or {}) do
+    if folder.name == dir then
+      print(dir, 'is already part of this workspace')
+      return
+    end
+  end
+
+  local wf = assert(get_workspace_folders(nil, dir))
+
+  self:_notify(ms.workspace_didChangeWorkspaceFolders, {
+    event = { added = wf, removed = {} },
+  })
+
+  if not self.workspace_folders then
+    self.workspace_folders = {}
+  end
+  vim.list_extend(self.workspace_folders, wf)
+end
+
+--- Remove a directory to the workspace folders.
+--- @param dir string?
+function Client:_remove_workspace_folder(dir)
+  local wf = assert(get_workspace_folders(nil, dir))
+
+  self:_notify(ms.workspace_didChangeWorkspaceFolders, {
+    event = { added = {}, removed = wf },
+  })
+
+  for idx, folder in pairs(self.workspace_folders) do
+    if folder.name == dir then
+      table.remove(self.workspace_folders, idx)
+      break
+    end
+  end
 end
 
 return Client

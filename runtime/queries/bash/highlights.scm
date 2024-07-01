@@ -124,10 +124,15 @@
 (test_operator) @operator
 
 (command_substitution
-  "$(" @punctuation.bracket)
+  "$(" @punctuation.special
+  ")" @punctuation.special)
 
 (process_substitution
-  "<(" @punctuation.bracket)
+  [
+    "<("
+    ">("
+  ] @punctuation.special
+  ")" @punctuation.special)
 
 (arithmetic_expansion
   [
@@ -170,12 +175,11 @@
     "trap" "type" "typeset" "ulimit" "umask" "unalias" "wait"))
 
 (command
-  argument:
-    [
-      (word) @variable.parameter
-      (concatenation
-        (word) @variable.parameter)
-    ])
+  argument: [
+    (word) @variable.parameter
+    (concatenation
+      (word) @variable.parameter)
+  ])
 
 (number) @number
 
@@ -224,5 +228,5 @@
 
 ((program
   .
-  (comment) @keyword.directive)
+  (comment) @keyword.directive @nospell)
   (#lua-match? @keyword.directive "^#!/"))

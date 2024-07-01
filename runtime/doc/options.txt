@@ -639,10 +639,9 @@ A jump table for the options with a short description can be found at |Q_op|.
 			*'allowrevins'* *'ari'* *'noallowrevins'* *'noari'*
 'allowrevins' 'ari'	boolean	(default off)
 			global
-	Allow CTRL-_ in Insert and Command-line mode.  This is default off, to
-	avoid that users that accidentally type CTRL-_ instead of SHIFT-_ get
-	into reverse Insert mode, and don't know how to get out.  See
-	'revins'.
+	Allow CTRL-_ in Insert mode.  This is default off, to avoid that users
+	that accidentally type CTRL-_ instead of SHIFT-_ get into reverse
+	Insert mode, and don't know how to get out.  See 'revins'.
 
 						*'ambiwidth'* *'ambw'*
 'ambiwidth' 'ambw'	string	(default "single")
@@ -1443,8 +1442,8 @@ A jump table for the options with a short description can be found at |Q_op|.
 'commentstring' 'cms'	string	(default "")
 			local to buffer
 	A template for a comment.  The "%s" in the value is replaced with the
-	comment text.  For example, C uses "/*%s*/". Currently only used to
-	add markers for folding, see |fold-marker|.
+	comment text, and should be padded with a space when possible.
+	Used for |commenting| and to add markers for folding, see |fold-marker|.
 
 						*'complete'* *'cpt'* *E535*
 'complete' 'cpt'	string	(default ".,w,b,u,t")
@@ -1496,7 +1495,7 @@ A jump table for the options with a short description can be found at |Q_op|.
 
 						*'completeopt'* *'cot'*
 'completeopt' 'cot'	string	(default "menu,preview")
-			global
+			global or local to buffer |global-local|
 	A comma-separated list of options for Insert mode completion
 	|ins-completion|.  The supported values are:
 
@@ -1518,6 +1517,10 @@ A jump table for the options with a short description can be found at |Q_op|.
 		    completion in the preview window.  Only works in
 		    combination with "menu" or "menuone".
 
+	   popup    Show extra information about the currently selected
+		    completion in a popup window.  Only works in combination
+		    with "menu" or "menuone".  Overrides "preview".
+
 	   noinsert Do not insert any text for a match until the user selects
 		    a match from the menu. Only works in combination with
 		    "menu" or "menuone". No effect if "longest" is present.
@@ -1526,9 +1529,13 @@ A jump table for the options with a short description can be found at |Q_op|.
 		    select one from the menu. Only works in combination with
 		    "menu" or "menuone".
 
-	   popup    Show extra information about the currently selected
-		    completion in a popup window.  Only works in combination
-		    with "menu" or "menuone".  Overrides "preview".
+	   fuzzy    Enable |fuzzy-matching| for completion candidates. This
+		    allows for more flexible and intuitive matching, where
+		    characters can be skipped and matches can be found even
+		    if the exact sequence is not typed.  Only makes a
+		    difference how completion candidates are reduced from the
+		    list of alternatives, but not how the candidates are
+		    collected (using different completion types).
 
 						*'completeslash'* *'csl'*
 'completeslash' 'csl'	string	(default "")
@@ -2852,25 +2859,33 @@ A jump table for the options with a short description can be found at |Q_op|.
 	This is a scanf-like string that uses the same format as the
 	'errorformat' option: see |errorformat|.
 
+	If ripgrep ('grepprg') is available, this option defaults to `%f:%l:%c:%m`.
+
 						*'grepprg'* *'gp'*
-'grepprg' 'gp'		string	(default "grep -n ",
-                                 Unix: "grep -n $* /dev/null")
+'grepprg' 'gp'		string	(default see below)
 			global or local to buffer |global-local|
 	Program to use for the |:grep| command.  This option may contain '%'
 	and '#' characters, which are expanded like when used in a command-
 	line.  The placeholder "$*" is allowed to specify where the arguments
 	will be included.  Environment variables are expanded |:set_env|.  See
 	|option-backslash| about including spaces and backslashes.
-	When your "grep" accepts the "-H" argument, use this to make ":grep"
-	also work well with a single file: >vim
-		set grepprg=grep\ -nH
-<	Special value: When 'grepprg' is set to "internal" the |:grep| command
+	Special value: When 'grepprg' is set to "internal" the |:grep| command
 	works like |:vimgrep|, |:lgrep| like |:lvimgrep|, |:grepadd| like
 	|:vimgrepadd| and |:lgrepadd| like |:lvimgrepadd|.
 	See also the section |:make_makeprg|, since most of the comments there
 	apply equally to 'grepprg'.
 	This option cannot be set from a |modeline| or in the |sandbox|, for
 	security reasons.
+	This option defaults to:
+	- `rg --vimgrep -uu ` if ripgrep is available (|:checkhealth|),
+	- `grep -HIn $* /dev/null` on Unix,
+	- `findstr /n $* nul` on Windows.
+	Ripgrep can perform additional filtering such as using .gitignore rules
+	and skipping hidden files. This is disabled by default (see the -u option)
+	to more closely match the behaviour of standard grep.
+	You can make ripgrep match Vim's case handling using the
+	-i/--ignore-case and -S/--smart-case options.
+	An |OptionSet| autocmd can be used to set it up to match automatically.
 
 				*'guicursor'* *'gcr'* *E545* *E546* *E548* *E549*
 'guicursor' 'gcr'	string	(default "n-v-c-sm:block,i-ci-ve:ver25,r-cr-o:hor20")
@@ -3604,7 +3619,7 @@ A jump table for the options with a short description can be found at |Q_op|.
 	Otherwise only one space is inserted.
 
 						*'jumpoptions'* *'jop'*
-'jumpoptions' 'jop'	string	(default "")
+'jumpoptions' 'jop'	string	(default "unload")
 			global
 	List of words that change the behavior of the |jumplist|.
 	  stack         Make the jumplist behave like the tagstack.
@@ -3616,6 +3631,9 @@ A jump table for the options with a short description can be found at |Q_op|.
 	  view          When moving through the jumplist, |changelist|,
 			|alternate-file| or using |mark-motions| try to
 			restore the |mark-view| in which the action occurred.
+
+	  unload        Remove unloaded buffers from the jumplist.
+			EXPERIMENTAL: this flag may change in the future.
 
 						*'keymap'* *'kmp'*
 'keymap' 'kmp'		string	(default "")
@@ -3826,6 +3844,9 @@ A jump table for the options with a short description can be found at |Q_op|.
 	non-breakable space characters as "+". Useful to see the difference
 	between tabs and spaces and for trailing blanks. Further changed by
 	the 'listchars' option.
+
+	When 'listchars' does not contain "tab" field, tabs are shown as "^I"
+	or "<09>", like how unprintable characters are displayed.
 
 	The cursor is displayed at the start of the space a Tab character
 	occupies, not at the end as usual in Normal mode.  To get this cursor
@@ -5452,8 +5473,8 @@ A jump table for the options with a short description can be found at |Q_op|.
 		message;  also for quickfix message (e.g., ":cn")
 	  s	don't give "search hit BOTTOM, continuing at TOP" or	*shm-s*
 		"search hit TOP, continuing at BOTTOM" messages; when using
-		the search count do not show "W" after the count message (see
-		S below)
+		the search count do not show "W" before the count message
+		(see |shm-S| below)
 	  t	truncate file message at the start if it is too long	*shm-t*
 		to fit on the command-line, "<" will appear in the left most
 		column; ignored in Ex mode
@@ -5475,7 +5496,11 @@ A jump table for the options with a short description can be found at |Q_op|.
 		`:silent` was used for the command; note that this also
 		affects messages from 'autoread' reloading
 	  S	do not show search count message when searching, e.g.	*shm-S*
-		"[1/5]"
+		"[1/5]". When the "S" flag is not present (e.g. search count
+		is shown), the "search hit BOTTOM, continuing at TOP" and
+		"search hit TOP, continuing at BOTTOM" messages are only
+		indicated by a "W" (Mnemonic: Wrapped) letter before the
+		search count statistics.
 
 	This gives you the opportunity to avoid that a change between buffers
 	requires you to hit <Enter>, but still gives as useful a message as
@@ -5694,8 +5719,7 @@ A jump table for the options with a short description can be found at |Q_op|.
 	highlighted with |hl-NonText|.
 	You may also want to add "lastline" to the 'display' option to show as
 	much of the last line as possible.
-	NOTE: only partly implemented, currently works with CTRL-E, CTRL-Y
-	and scrolling with the mouse.
+	NOTE: partly implemented, doesn't work yet for |gj| and |gk|.
 
 						*'softtabstop'* *'sts'*
 'softtabstop' 'sts'	number	(default 0)
@@ -5933,8 +5957,7 @@ A jump table for the options with a short description can be found at |Q_op|.
 	Some of the items from the 'statusline' format are different for
 	'statuscolumn':
 
-	%l	line number of currently drawn line
-	%r	relative line number of currently drawn line
+	%l	line number column for currently drawn line
 	%s	sign column for currently drawn line
 	%C	fold column for currently drawn line
 
@@ -5961,11 +5984,8 @@ A jump table for the options with a short description can be found at |Q_op|.
 	handler should be written with this in mind.
 
 	Examples: >vim
-		" Relative number with bar separator and click handlers:
-		set statuscolumn=%@SignCb@%s%=%T%@NumCb@%r│%T
-
-		" Right aligned relative cursor line number:
-		let &stc='%=%{v:relnum?v:relnum:v:lnum} '
+		" Line number with bar separator and click handlers:
+		set statuscolumn=%@SignCb@%s%=%T%@NumCb@%l│%T
 
 		" Line numbers in hexadecimal for non wrapped part of lines:
 		let &stc='%=%{v:virtnum>0?"":printf("%x",v:lnum)} '
@@ -6349,7 +6369,7 @@ A jump table for the options with a short description can be found at |Q_op|.
 	appear wrong in many places.
 	The value must be more than 0 and less than 10000.
 
-	There are four main ways to use tabs in Vim:
+	There are five main ways to use tabs in Vim:
 	1. Always keep 'tabstop' at 8, set 'softtabstop' and 'shiftwidth' to 4
 	   (or 3 or whatever you prefer) and use 'noexpandtab'.  Then Vim
 	   will use a mix of tabs and spaces, but typing <Tab> and <BS> will
@@ -6831,6 +6851,7 @@ A jump table for the options with a short description can be found at |Q_op|.
 
 	Level   Messages ~
 	----------------------------------------------------------------------
+	1	Enables Lua tracing (see above). Does not produce messages.
 	2	When a file is ":source"'ed, or |shada| file is read or written.
 	3	UI info, terminal capabilities.
 	4	Shell commands.
@@ -7165,8 +7186,8 @@ A jump table for the options with a short description can be found at |Q_op|.
 	will scroll 'window' minus two lines, with a minimum of one.
 	When 'window' is equal to 'lines' minus one CTRL-F and CTRL-B scroll
 	in a much smarter way, taking care of wrapping lines.
-	When resizing the Vim window, the value is smaller than 1 or more than
-	or equal to 'lines' it will be set to 'lines' minus 1.
+	When resizing the Vim window, and the value is smaller than 1 or more
+	than or equal to 'lines' it will be set to 'lines' minus 1.
 	Note: Do not confuse this with the height of the Vim window, use
 	'lines' for that.
 

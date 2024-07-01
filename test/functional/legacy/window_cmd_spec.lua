@@ -1,18 +1,16 @@
-local helpers = require('test.functional.helpers')(after_each)
+local n = require('test.functional.testnvim')()
 local Screen = require('test.functional.ui.screen')
-local clear = helpers.clear
-local exec = helpers.exec
-local exec_lua = helpers.exec_lua
-local command = helpers.command
-local feed = helpers.feed
+
+local clear = n.clear
+local exec = n.exec
+local exec_lua = n.exec_lua
+local command = n.command
+local feed = n.feed
 
 -- oldtest: Test_window_cmd_ls0_split_scrolling()
 it('scrolling with laststatus=0 and :botright split', function()
   clear('--cmd', 'set ruler')
   local screen = Screen.new(40, 10)
-  screen:set_default_attr_ids({
-    [1] = { reverse = true }, -- StatusLineNC
-  })
   screen:attach()
   exec([[
     set laststatus=0
@@ -25,7 +23,7 @@ it('scrolling with laststatus=0 and :botright split', function()
     98                                      |
     99                                      |
     100                                     |
-    {1:[No Name] [+]         100,1          Bot}|
+    {2:[No Name] [+]         100,1          Bot}|
     97                                      |
     98                                      |
     99                                      |

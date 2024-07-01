@@ -1,12 +1,14 @@
+local t = require('test.testutil')
+local n = require('test.functional.testnvim')()
 local Screen = require('test.functional.ui.screen')
-local helpers = require('test.functional.helpers')(after_each)
-local clear, feed = helpers.clear, helpers.feed
-local expect = helpers.expect
-local eq = helpers.eq
-local poke_eventloop = helpers.poke_eventloop
-local exc_exec = helpers.exc_exec
-local feed_command = helpers.feed_command
-local exec = helpers.exec
+
+local clear, feed = n.clear, n.feed
+local expect = n.expect
+local eq = t.eq
+local poke_eventloop = n.poke_eventloop
+local exc_exec = n.exc_exec
+local feed_command = n.feed_command
+local exec = n.exec
 
 before_each(clear)
 
@@ -99,11 +101,6 @@ describe('Visual selection highlight', function()
   -- oldtest: Test_visual_sbr()
   it("when 'showbreak' is set", function()
     local screen = Screen.new(60, 6)
-    screen:set_default_attr_ids({
-      [0] = { bold = true, foreground = Screen.colors.Blue }, -- NonText
-      [1] = { background = Screen.colors.LightGrey, foreground = Screen.colors.Black }, -- Visual
-      [2] = { bold = true }, -- ModeMsg
-    })
     screen:attach()
     exec([[
       set showbreak=>
@@ -112,9 +109,9 @@ describe('Visual selection highlight', function()
     ]])
     feed('v$')
     screen:expect([[
-      {0:>}{1:n, no sea takimata sanctus est Lorem ipsum dolor sit amet.}^ |
+      {1:>}{17:n, no sea takimata sanctus est Lorem ipsum dolor sit amet.}^ |
                                                                   |*4
-      {2:-- VISUAL --}                                                |
+      {5:-- VISUAL --}                                                |
     ]])
   end)
 end)

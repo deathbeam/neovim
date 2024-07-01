@@ -47,8 +47,8 @@ typedef struct {
 #define VALID_VIRTCOL   0x04    // w_virtcol (file col) is valid
 #define VALID_CHEIGHT   0x08    // w_cline_height and w_cline_folded valid
 #define VALID_CROW      0x10    // w_cline_row is valid
-#define VALID_BOTLINE   0x20    // w_botine and w_empty_rows are valid
-#define VALID_BOTLINE_AP 0x40   // w_botine is approximated
+#define VALID_BOTLINE   0x20    // w_botline and w_empty_rows are valid
+#define VALID_BOTLINE_AP 0x40   // w_botline is approximated
 #define VALID_TOPLINE   0x80    // w_topline is valid (for cursor position)
 
 // flags for b_flags
@@ -461,6 +461,19 @@ struct file_buffer {
 
   bool b_marks_read;            // Have we read ShaDa marks yet?
 
+  bool b_modified_was_set;  ///< did ":set modified"
+  bool b_did_filetype;      ///< FileType event found
+  bool b_keep_filetype;     ///< value for did_filetype when starting
+                            ///< to execute autocommands
+
+  /// Set by the apply_autocmds_group function if the given event is equal to
+  /// EVENT_FILETYPE. Used by the readfile function in order to determine if
+  /// EVENT_BUFREADPOST triggered the EVENT_FILETYPE.
+  ///
+  /// Relying on this value requires one to reset it prior calling
+  /// apply_autocmds_group().
+  bool b_au_did_filetype;
+
   // The following only used in undo.c.
   u_header_T *b_u_oldhead;     // pointer to oldest header
   u_header_T *b_u_newhead;     // pointer to newest header; may not be valid
@@ -520,6 +533,8 @@ struct file_buffer {
   char *b_p_cinsd;              ///< 'cinscopedecls'
   char *b_p_com;                ///< 'comments'
   char *b_p_cms;                ///< 'commentstring'
+  char *b_p_cot;                ///< 'completeopt' local value
+  unsigned b_cot_flags;         ///< flags for 'completeopt'
   char *b_p_cpt;                ///< 'complete'
 #ifdef BACKSLASH_IN_FILENAME
   char *b_p_csl;                ///< 'completeslash'

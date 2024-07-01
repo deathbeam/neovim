@@ -29,6 +29,7 @@
 #include "nvim/digraph.h"
 #include "nvim/drawscreen.h"
 #include "nvim/edit.h"
+#include "nvim/errors.h"
 #include "nvim/eval.h"
 #include "nvim/eval/typval.h"
 #include "nvim/eval/typval_defs.h"
@@ -144,7 +145,7 @@ struct loop_cookie {
   int current_line;                     // last read line from growarray
   int repeating;                        // true when looping a second time
   // When "repeating" is false use "getline" and "cookie" to get lines
-  char *(*getline)(int, void *, int, bool);
+  LineGetter lc_getline;
   void *cookie;
 };
 
@@ -214,6 +215,38 @@ static void restore_dbg_stuff(struct dbg_stuff *dsp)
   need_rethrow = dsp->need_rethrow;
   check_cstack = dsp->check_cstack;
   current_exception = dsp->current_exception;
+}
+
+/// Check if ffname differs from fnum.
+/// fnum is a buffer number. 0 == current buffer, 1-or-more must be a valid buffer ID.
+/// ffname is a full path to where a buffer lives on-disk or would live on-disk.
+static bool is_other_file(int fnum, char *ffname)
+{
+  if (fnum != 0) {
+    if (fnum == curbuf->b_fnum) {
+      return false;
+    }
+
+    return true;
+  }
+
+  if (ffname == NULL) {
+    return true;
+  }
+
+  if (*ffname == NUL) {
+    return false;
+  }
+
+  if (!curbuf->file_id_valid
+      && curbuf->b_sfname != NULL
+      && *curbuf->b_sfname != NUL) {
+    // This occurs with unsaved buffers. In which case `ffname`
+    // actually corresponds to curbuf->b_sfname
+    return path_fnamecmp(ffname, curbuf->b_sfname) != 0;
+  }
+
+  return otherfile(ffname);
 }
 
 /// Repeatedly get commands for Ex mode, until the ":vi" command is given.
@@ -590,7 +623,7 @@ int do_cmdline(char *cmdline, LineGetter fgetline, void *cookie, int flags)
       cmd_cookie = (void *)&cmd_loop_cookie;
       cmd_loop_cookie.lines_gap = &lines_ga;
       cmd_loop_cookie.current_line = current_line;
-      cmd_loop_cookie.getline = fgetline;
+      cmd_loop_cookie.lc_getline = fgetline;
       cmd_loop_cookie.cookie = cookie;
       cmd_loop_cookie.repeating = (current_line < lines_ga.ga_len);
 
@@ -971,10 +1004,10 @@ static char *get_loop_line(int c, void *cookie, int indent, bool do_concat)
     }
     char *line;
     // First time inside the ":while"/":for": get line normally.
-    if (cp->getline == NULL) {
+    if (cp->lc_getline == NULL) {
       line = getcmdline(c, 0, indent, do_concat);
     } else {
-      line = cp->getline(c, cp->cookie, indent, do_concat);
+      line = cp->lc_getline(c, cp->cookie, indent, do_concat);
     }
     if (line != NULL) {
       store_loop_line(cp->lines_gap, line);
@@ -1011,7 +1044,7 @@ bool getline_equal(LineGetter fgetline, void *cookie, LineGetter func)
   LineGetter gp = fgetline;
   struct loop_cookie *cp = (struct loop_cookie *)cookie;
   while (gp == get_loop_line) {
-    gp = cp->getline;
+    gp = cp->lc_getline;
     cp = cp->cookie;
   }
   return gp == func;
@@ -1029,7 +1062,7 @@ void *getline_cookie(LineGetter fgetline, void *cookie)
   LineGetter gp = fgetline;
   struct loop_cookie *cp = (struct loop_cookie *)cookie;
   while (gp == get_loop_line) {
-    gp = cp->getline;
+    gp = cp->lc_getline;
     cp = cp->cookie;
   }
   return cp;
@@ -1456,7 +1489,7 @@ bool parse_cmdline(char *cmdline, exarg_T *eap, CmdParseInfo *cmdinfo, const cha
     .line2 = 1,
     .cmd = cmdline,
     .cmdlinep = &cmdline,
-    .getline = NULL,
+    .ea_getline = NULL,
     .cookie = NULL,
   };
 
@@ -1696,12 +1729,6 @@ int execute_cmd(exarg_T *eap, CmdParseInfo *cmdinfo, bool preview)
   }
 
   const char *errormsg = NULL;
-#undef ERROR
-#define ERROR(msg) \
-  do { \
-    errormsg = msg; \
-    goto end; \
-  } while (0)
 
   cmdmod_T save_cmdmod = cmdmod;
   cmdmod = cmdinfo->cmdmod;
@@ -1712,16 +1739,19 @@ int execute_cmd(exarg_T *eap, CmdParseInfo *cmdinfo, bool preview)
   if (!MODIFIABLE(curbuf) && (eap->argt & EX_MODIFY)
       // allow :put in terminals
       && !(curbuf->terminal && eap->cmdidx == CMD_put)) {
-    ERROR(_(e_modifiable));
+    errormsg = _(e_modifiable);
+    goto end;
   }
   if (!IS_USER_CMDIDX(eap->cmdidx)) {
     if (cmdwin_type != 0 && !(eap->argt & EX_CMDWIN)) {
       // Command not allowed in the command line window
-      ERROR(_(e_cmdwin));
+      errormsg = _(e_cmdwin);
+      goto end;
     }
     if (text_locked() && !(eap->argt & EX_LOCK_OK)) {
       // Command not allowed when text is locked
-      ERROR(_(get_text_locked_msg()));
+      errormsg = _(get_text_locked_msg());
+      goto end;
     }
   }
   // Disallow editing another buffer when "curbuf->b_ro_locked" is set.
@@ -1769,7 +1799,6 @@ end:
 
   do_cmdline_end();
   return retv;
-#undef ERROR
 }
 
 static void profile_cmd(const exarg_T *eap, cstack_T *cstack, LineGetter fgetline, void *cookie)
@@ -1965,7 +1994,7 @@ static char *do_one_cmd(char **cmdlinep, int flags, cstack_T *cstack, LineGetter
   // The "ea" structure holds the arguments that can be used.
   ea.cmd = *cmdlinep;
   ea.cmdlinep = cmdlinep;
-  ea.getline = fgetline;
+  ea.ea_getline = fgetline;
   ea.cookie = cookie;
   ea.cstack = cstack;
 
@@ -2440,7 +2469,7 @@ int parse_command_modifiers(exarg_T *eap, const char **errormsg, cmdmod_T *cmod,
 
     // in ex mode, an empty line works like :+
     if (*eap->cmd == NUL && exmode_active
-        && getline_equal(eap->getline, eap->cookie, getexline)
+        && getline_equal(eap->ea_getline, eap->cookie, getexline)
         && curwin->w_cursor.lnum < curbuf->b_ml.ml_line_count) {
       eap->cmd = "+";
       if (!skip_only) {
@@ -2663,7 +2692,7 @@ int parse_command_modifiers(exarg_T *eap, const char **errormsg, cmdmod_T *cmod,
 
 /// Apply the command modifiers.  Saves current state in "cmdmod", call
 /// undo_cmdmod() later.
-static void apply_cmdmod(cmdmod_T *cmod)
+void apply_cmdmod(cmdmod_T *cmod)
 {
   if ((cmod->cmod_flags & CMOD_SANDBOX) && !cmod->cmod_did_sandbox) {
     sandbox++;
@@ -3474,7 +3503,7 @@ static linenr_T get_address(exarg_T *eap, char **ptr, cmd_addr_T addr_type, bool
         }
         searchcmdlen = 0;
         flags = silent ? 0 : SEARCH_HIS | SEARCH_MSG;
-        if (!do_search(NULL, c, c, cmd, 1, flags, NULL)) {
+        if (!do_search(NULL, c, c, cmd, strlen(cmd), 1, flags, NULL)) {
           curwin->w_cursor = pos;
           cmd = NULL;
           goto error;
@@ -3511,7 +3540,7 @@ static linenr_T get_address(exarg_T *eap, char **ptr, cmd_addr_T addr_type, bool
         pos.coladd = 0;
         if (searchit(curwin, curbuf, &pos, NULL,
                      *cmd == '?' ? BACKWARD : FORWARD,
-                     "", 1, SEARCH_MSG, i, NULL) != FAIL) {
+                     "", 0, 1, SEARCH_MSG, i, NULL) != FAIL) {
           lnum = pos.lnum;
         } else {
           cmd = NULL;
@@ -3797,8 +3826,8 @@ char *replace_makeprg(exarg_T *eap, char *arg, char **cmdlinep)
       // No $* in arg, build "<makeprg> <arg>" instead
       new_cmdline = xmalloc(strlen(program) + strlen(arg) + 2);
       STRCPY(new_cmdline, program);
-      STRCAT(new_cmdline, " ");
-      STRCAT(new_cmdline, arg);
+      strcat(new_cmdline, " ");
+      strcat(new_cmdline, arg);
     }
 
     msg_make(arg);
@@ -4050,7 +4079,7 @@ void separate_nextcmd(exarg_T *eap)
         break;
       }
     } else if (
-               // Check for '"': start of comment or '|': next command */
+               // Check for '"': start of comment or '|': next command
                // :@" does not start a comment!
                // :redir @" doesn't either.
                (*p == '"'
@@ -4085,7 +4114,7 @@ static char *getargcmd(char **argp)
 
   if (*arg == '+') {        // +[command]
     arg++;
-    if (ascii_isspace(*arg) || *arg == '\0') {
+    if (ascii_isspace(*arg) || *arg == NUL) {
       command = dollar_command;
     } else {
       command = arg;
@@ -4368,12 +4397,15 @@ static int get_tabpage_arg(exarg_T *eap)
       tab_number = 0;
     } else {
       tab_number = (int)eap->line2;
-      char *cmdp = eap->cmd;
-      while (--cmdp > *eap->cmdlinep && (*cmdp == ' ' || ascii_isdigit(*cmdp))) {}
-      if (!unaccept_arg0 && *cmdp == '-') {
-        tab_number--;
-        if (tab_number < unaccept_arg0) {
-          eap->errmsg = _(e_invrange);
+      if (!unaccept_arg0) {
+        char *cmdp = eap->cmd;
+        while (--cmdp > *eap->cmdlinep
+               && (ascii_iswhite(*cmdp) || ascii_isdigit(*cmdp))) {}
+        if (*cmdp == '-') {
+          tab_number--;
+          if (tab_number < unaccept_arg0) {
+            eap->errmsg = _(e_invrange);
+          }
         }
       }
     }
@@ -5368,11 +5400,13 @@ static void ex_find(exarg_T *eap)
 /// ":edit", ":badd", ":balt", ":visual".
 static void ex_edit(exarg_T *eap)
 {
+  char *ffname = eap->cmdidx == CMD_enew ? NULL : eap->arg;
+
   // Exclude commands which keep the window's current buffer
   if (eap->cmdidx != CMD_badd
       && eap->cmdidx != CMD_balt
       // All other commands must obey 'winfixbuf' / ! rules
-      && !check_can_set_curbuf_forceit(eap->forceit)) {
+      && (is_other_file(0, ffname) && !check_can_set_curbuf_forceit(eap->forceit))) {
     return;
   }
 
@@ -5849,7 +5883,7 @@ static void ex_equal(exarg_T *eap)
 static void ex_sleep(exarg_T *eap)
 {
   if (cursor_valid(curwin)) {
-    setcursor_mayforce(true);
+    setcursor_mayforce(curwin, true);
   }
 
   int64_t len = eap->line2;
@@ -7202,7 +7236,7 @@ char *expand_sfile(char *arg)
       memmove(newres, result, (size_t)(p - result));
       STRCPY(newres + (p - result), repl);
       len = strlen(newres);
-      STRCAT(newres, p + srclen);
+      strcat(newres, p + srclen);
       xfree(repl);
       xfree(result);
       result = newres;
@@ -7345,7 +7379,7 @@ void filetype_maybe_enable(void)
 /// ":setfiletype [FALLBACK] {name}"
 static void ex_setfiletype(exarg_T *eap)
 {
-  if (did_filetype) {
+  if (curbuf->b_did_filetype) {
     return;
   }
 
@@ -7356,7 +7390,7 @@ static void ex_setfiletype(exarg_T *eap)
 
   set_option_value_give_err(kOptFiletype, CSTR_AS_OPTVAL(arg), OPT_LOCAL);
   if (arg != eap->arg) {
-    did_filetype = false;
+    curbuf->b_did_filetype = false;
   }
 }
 

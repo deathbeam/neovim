@@ -4,7 +4,7 @@ local Range = require('vim.treesitter._range')
 
 local ns = api.nvim_create_namespace('treesitter/highlighter')
 
----@alias vim.treesitter.highlighter.Iter fun(end_line: integer|nil): integer, TSNode, vim.treesitter.query.TSMetadata, table<integer, TSNode[]>
+---@alias vim.treesitter.highlighter.Iter fun(end_line: integer|nil): integer, TSNode, vim.treesitter.query.TSMetadata, TSQueryMatch
 
 ---@class (private) vim.treesitter.highlighter.Query
 ---@field private _query vim.treesitter.Query?
@@ -47,7 +47,7 @@ function TSHighlighterQuery:get_hl_from_capture(capture)
   return self.hl_cache[capture]
 end
 
----@package
+---@nodoc
 function TSHighlighterQuery:query()
   return self._query
 end
@@ -75,7 +75,7 @@ local TSHighlighter = {
 
 TSHighlighter.__index = TSHighlighter
 
----@package
+---@nodoc
 ---
 --- Creates a highlighter for `tree`.
 ---
@@ -143,7 +143,7 @@ function TSHighlighter.new(tree, opts)
     vim.cmd.runtime({ 'syntax/synload.vim', bang = true })
   end
 
-  api.nvim_buf_call(self.bufnr, function()
+  vim._with({ buf = self.bufnr }, function()
     vim.opt_local.spelloptions:append('noplainbuffer')
   end)
 
@@ -215,7 +215,7 @@ end
 ---@param start_row integer
 ---@param new_end integer
 function TSHighlighter:on_bytes(_, _, start_row, _, _, _, _, _, new_end)
-  api.nvim__buf_redraw_range(self.bufnr, start_row, start_row + new_end + 1)
+  api.nvim__redraw({ buf = self.bufnr, range = { start_row, start_row + new_end + 1 } })
 end
 
 ---@package
@@ -227,12 +227,12 @@ end
 ---@param changes Range6[]
 function TSHighlighter:on_changedtree(changes)
   for _, ch in ipairs(changes) do
-    api.nvim__buf_redraw_range(self.bufnr, ch[1], ch[4] + 1)
+    api.nvim__redraw({ buf = self.bufnr, range = { ch[1], ch[4] + 1 } })
   end
 end
 
 --- Gets the query used for @param lang
----@package
+---@nodoc
 ---@param lang string Language used by the highlighter.
 ---@return vim.treesitter.highlighter.Query
 function TSHighlighter:get_query(lang)
@@ -243,7 +243,7 @@ function TSHighlighter:get_query(lang)
   return self._queries[lang]
 end
 
---- @param match table<integer,TSNode[]>
+--- @param match TSQueryMatch
 --- @param bufnr integer
 --- @param capture integer
 --- @param metadata vim.treesitter.query.TSMetadata
@@ -256,13 +256,15 @@ local function get_url(match, bufnr, capture, metadata)
     return url
   end
 
-  if not match or not match[url] then
+  local captures = match:captures()
+
+  if not captures[url] then
     return
   end
 
   -- Assume there is only one matching node. If there is more than one, take the URL
   -- from the first.
-  local other_node = match[url][1]
+  local other_node = captures[url][1]
 
   return vim.treesitter.get_node_text(other_node, bufnr, {
     metadata = metadata[url],
@@ -296,6 +298,10 @@ local function on_line_impl(self, buf, line, is_spell_nav)
     end
 
     if state.iter == nil or state.next_row < line then
+      -- Mainly used to skip over folds
+
+      -- TODO(lewis6991): Creating a new iterator loses the cached predicate results for query
+      -- matches. Move this logic inside iter_captures() so we can maintain the cache.
       state.iter =
         state.highlighter_query:query():iter_captures(root_node, self.bufnr, line, root_end_row + 1)
     end
@@ -371,11 +377,15 @@ function TSHighlighter._on_spell_nav(_, _, buf, srow, _, erow, _)
     return
   end
 
+  -- Do not affect potentially populated highlight state. Here we just want a temporary
+  -- empty state so the C code can detect whether the region should be spell checked.
+  local highlight_states = self._highlight_states
   self:prepare_highlight_states(srow, erow)
 
   for row = srow, erow do
     on_line_impl(self, buf, row, true)
   end
+  self._highlight_states = highlight_states
 end
 
 ---@private

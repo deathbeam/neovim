@@ -1,9 +1,10 @@
-local helpers = require('test.functional.helpers')(after_each)
+local n = require('test.functional.testnvim')()
 local Screen = require('test.functional.ui.screen')
-local clear = helpers.clear
-local exec = helpers.exec
-local feed = helpers.feed
-local assert_alive = helpers.assert_alive
+
+local clear = n.clear
+local exec = n.exec
+local feed = n.feed
+local assert_alive = n.assert_alive
 
 before_each(clear)
 
@@ -659,10 +660,6 @@ describe('smoothscroll', function()
   -- oldtest: Test_smoothscroll_zero_width()
   it('does not divide by zero with a narrow window', function()
     screen:try_resize(12, 2)
-    screen:set_default_attr_ids({
-      [1] = { foreground = Screen.colors.Brown },
-      [2] = { foreground = Screen.colors.Blue1, bold = true },
-    })
     exec([[
       call setline(1, ['a'->repeat(100)])
       set wrap smoothscroll number laststatus=0
@@ -672,12 +669,12 @@ describe('smoothscroll', function()
       wincmd v
     ]])
     screen:expect([[
-      {1:  1^ }│{1: }│{1: }│{1: }│{1: }|
+      {8:  1^ }│{8: }│{8: }│{8: }│{8: }|
                   |
     ]])
     feed('llllllllll<C-W>o')
     screen:expect([[
-      {2:<<<}{1: }aa^aaaaaa|
+      {1:<<<}{8: }aa^aaaaaa|
                   |
     ]])
   end)
@@ -744,7 +741,7 @@ describe('smoothscroll', function()
                                               |
     ]])
     exec("call setline(92, 'a'->repeat(100))")
-    feed('<C-B>G')
+    feed('<C-L><C-B>G')
     -- cursor is not placed below window
     screen:expect([[
       {1:<<<}aaaaaaaaaaaaaaaaa                    |
@@ -757,12 +754,6 @@ describe('smoothscroll', function()
   -- oldtest: Test_smoothscroll_incsearch()
   it('does not reset skipcol when doing incremental search on the same word', function()
     screen:try_resize(40, 8)
-    screen:set_default_attr_ids({
-      [1] = { foreground = Screen.colors.Brown },
-      [2] = { foreground = Screen.colors.Blue1, bold = true },
-      [3] = { background = Screen.colors.Yellow1 },
-      [4] = { reverse = true },
-    })
     exec([[
       set smoothscroll number scrolloff=0 incsearch
       call setline(1, repeat([''], 20))
@@ -771,46 +762,46 @@ describe('smoothscroll', function()
     ]])
     feed('/b')
     screen:expect([[
-      {2:<<<}{1: }aaaaaaaaaaaaaaaaaaaaaaaaaaaa        |
-      {1: 12 }                                    |
-      {1: 13 }                                    |
-      {1: 14 }{4:b}{3:bbb}                                |
-      {1: 15 }                                    |
-      {1: 16 }                                    |
-      {1: 17 }                                    |
+      {1:<<<}{8: }aaaaaaaaaaaaaaaaaaaaaaaaaaaa        |
+      {8: 12 }                                    |
+      {8: 13 }                                    |
+      {8: 14 }{2:b}{10:bbb}                                |
+      {8: 15 }                                    |
+      {8: 16 }                                    |
+      {8: 17 }                                    |
       /b^                                      |
     ]])
     feed('b')
     screen:expect([[
-      {2:<<<}{1: }aaaaaaaaaaaaaaaaaaaaaaaaaaaa        |
-      {1: 12 }                                    |
-      {1: 13 }                                    |
-      {1: 14 }{4:bb}{3:bb}                                |
-      {1: 15 }                                    |
-      {1: 16 }                                    |
-      {1: 17 }                                    |
+      {1:<<<}{8: }aaaaaaaaaaaaaaaaaaaaaaaaaaaa        |
+      {8: 12 }                                    |
+      {8: 13 }                                    |
+      {8: 14 }{2:bb}{10:bb}                                |
+      {8: 15 }                                    |
+      {8: 16 }                                    |
+      {8: 17 }                                    |
       /bb^                                     |
     ]])
     feed('b')
     screen:expect([[
-      {2:<<<}{1: }aaaaaaaaaaaaaaaaaaaaaaaaaaaa        |
-      {1: 12 }                                    |
-      {1: 13 }                                    |
-      {1: 14 }{4:bbb}b                                |
-      {1: 15 }                                    |
-      {1: 16 }                                    |
-      {1: 17 }                                    |
+      {1:<<<}{8: }aaaaaaaaaaaaaaaaaaaaaaaaaaaa        |
+      {8: 12 }                                    |
+      {8: 13 }                                    |
+      {8: 14 }{2:bbb}b                                |
+      {8: 15 }                                    |
+      {8: 16 }                                    |
+      {8: 17 }                                    |
       /bbb^                                    |
     ]])
     feed('b')
     screen:expect([[
-      {2:<<<}{1: }aaaaaaaaaaaaaaaaaaaaaaaaaaaa        |
-      {1: 12 }                                    |
-      {1: 13 }                                    |
-      {1: 14 }{4:bbbb}                                |
-      {1: 15 }                                    |
-      {1: 16 }                                    |
-      {1: 17 }                                    |
+      {1:<<<}{8: }aaaaaaaaaaaaaaaaaaaaaaaaaaaa        |
+      {8: 12 }                                    |
+      {8: 13 }                                    |
+      {8: 14 }{2:bbbb}                                |
+      {8: 15 }                                    |
+      {8: 16 }                                    |
+      {8: 17 }                                    |
       /bbbb^                                   |
     ]])
   end)
@@ -818,10 +809,6 @@ describe('smoothscroll', function()
   -- oldtest: Test_smoothscroll_multi_skipcol()
   it('scrolling multiple lines and stopping at non-zero skipcol', function()
     screen:try_resize(40, 10)
-    screen:set_default_attr_ids({
-      [0] = { foreground = Screen.colors.Blue, bold = true },
-      [1] = { background = Screen.colors.Grey90 },
-    })
     exec([[
       setlocal cursorline scrolloff=0 smoothscroll
       call setline(1, repeat([''], 8))
@@ -832,7 +819,7 @@ describe('smoothscroll', function()
       redraw
     ]])
     screen:expect([[
-      {1:^                                        }|
+      {21:^                                        }|
                                               |
       aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
       aaaaaaaaaa                              |
@@ -844,22 +831,22 @@ describe('smoothscroll', function()
     ]])
     feed('3<C-E>')
     screen:expect([[
-      {0:<<<}{1:aaaaaa^a                              }|
+      {1:<<<}{21:aaaaaa^a                              }|
       aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
       aaaaaaaaaa                              |
                                               |*2
       bbb                                     |
       ccc                                     |
-      {0:~                                       }|*2
+      {1:~                                       }|*2
                                               |
     ]])
     feed('2<C-E>')
     screen:expect([[
-      {0:<<<}{1:aaaaaa^a                              }|
+      {1:<<<}{21:aaaaaa^a                              }|
                                               |*2
       bbb                                     |
       ccc                                     |
-      {0:~                                       }|*4
+      {1:~                                       }|*4
                                               |
     ]])
   end)
@@ -867,12 +854,6 @@ describe('smoothscroll', function()
   -- oldtest: Test_smoothscroll_zero_width_scroll_cursor_bot()
   it('does not divide by zero in zero-width window', function()
     screen:try_resize(40, 19)
-    screen:set_default_attr_ids({
-      [1] = { foreground = Screen.colors.Brown }, -- LineNr
-      [2] = { bold = true, foreground = Screen.colors.Blue }, -- NonText
-      [3] = { bold = true, reverse = true }, -- StatusLine
-      [4] = { reverse = true }, -- StatusLineNC
-    })
     exec([[
       silent normal yy
       silent normal 19p
@@ -885,10 +866,10 @@ describe('smoothscroll', function()
       silent normal 20G
     ]])
     screen:expect([[
-      {1: }│                                      |
-      {2:@}│                                      |*15
-      {2:^@}│                                      |
-      {3:< }{4:[No Name] [+]                         }|
+      {8: }│                                      |
+      {1:@}│                                      |*15
+      {1:^@}│                                      |
+      {3:< }{2:[No Name] [+]                         }|
                                               |
     ]])
   end)
@@ -930,6 +911,119 @@ describe('smoothscroll', function()
     ]])
     feed('2<C-E>')
     assert_alive()
+  end)
+
+  -- oldtest: Test_smoothscroll_insert_bottom()
+  it('works in Insert mode at bottom of window', function()
+    screen:try_resize(40, 9)
+    exec([[
+      call setline(1, repeat([repeat('A very long line ...', 10)], 5))
+      set wrap smoothscroll scrolloff=0
+    ]])
+    feed('Go123456789<CR>')
+    screen:expect([[
+      {1:<<<}ery long line ...A very long line ...|
+      A very long line ...A very long line ...|*5
+      123456789                               |
+      ^                                        |
+      {5:-- INSERT --}                            |
+    ]])
+  end)
+
+  -- oldtest: Test_smoothscroll_in_qf_window()
+  it('works in quickfix window when changing quickfix list', function()
+    screen:try_resize(60, 20)
+    exec([[
+      set nocompatible display=lastline
+      copen 5
+      setlocal number smoothscroll
+      let g:l = [{'text': 'foo'}] + repeat([{'text': join(range(30))}], 10)
+      call setqflist(g:l, 'r')
+      normal! G
+      wincmd t
+      let g:l1 = [{'text': join(range(1000))}]
+    ]])
+    screen:expect([[
+      ^                                                            |
+      {1:~                                                           }|*11
+      {3:[No Name]                                                   }|
+      {1:<<<}{8: }21 22 23 24 25 26 27 28 29                              |
+      {8: 10 }|| 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 |
+      {8:    }21 22 23 24 25 26 27 28 29                              |
+      {8: 11 }|| 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 |
+      {8:    }21 22 23 24 25 26 27 28 29                              |
+      {2:[Quickfix List]                                             }|
+                                                                  |
+    ]])
+
+    feed([[:call setqflist([], 'r')<CR>]])
+    local screen_empty = [[
+      ^                                                            |
+      {1:~                                                           }|*11
+      {3:[No Name]                                                   }|
+      {8:  1 }                                                        |
+      {1:~                                                           }|*4
+      {2:[Quickfix List]                                             }|
+      :call setqflist([], 'r')                                    |
+    ]]
+    screen:expect(screen_empty)
+
+    feed([[:call setqflist(g:l, 'r')<CR>]])
+    local screen_l_top = [[
+      ^                                                            |
+      {1:~                                                           }|*11
+      {3:[No Name]                                                   }|
+      {8:  1 }{10:|| foo                                                  }|
+      {8:  2 }|| 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 |
+      {8:    }21 22 23 24 25 26 27 28 29                              |
+      {8:  3 }|| 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 |
+      {8:    }21 22 23 24 25 26 27 28 29                              |
+      {2:[Quickfix List]                                             }|
+      :call setqflist(g:l, 'r')                                   |
+    ]]
+    screen:expect(screen_l_top)
+
+    feed([[:call setqflist(g:l1, 'r')<CR>]])
+    local screen_l1_top = [[
+      ^                                                            |
+      {1:~                                                           }|*11
+      {3:[No Name]                                                   }|
+      {8:  1 }{10:|| 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 }|
+      {8:    }{10:21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39}|
+      {8:    }{10: 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 5}|
+      {8:    }{10:8 59 60 61 62 63 64 65 66 67 68 69 70 71 72 73 74 75 76 }|
+      {8:    }{10:77 78 79 80 81 82 83 84 85 86 87 88 89 90 91 92 93 94 95}|
+      {2:[Quickfix List]                                             }|
+      :call setqflist(g:l1, 'r')                                  |
+    ]]
+    screen:expect(screen_l1_top)
+
+    feed('<C-W>b$<C-W>t')
+    local screen_l1_bot = [[
+      ^                                                            |
+      {1:~                                                           }|*11
+      {3:[No Name]                                                   }|
+      {1:<<<}{8: }{10: 937 938 939 940 941 942 943 944 945 946 947 948 949 950}|
+      {8:    }{10: 951 952 953 954 955 956 957 958 959 960 961 962 963 964}|
+      {8:    }{10: 965 966 967 968 969 970 971 972 973 974 975 976 977 978}|
+      {8:    }{10: 979 980 981 982 983 984 985 986 987 988 989 990 991 992}|
+      {8:    }{10: 993 994 995 996 997 998 999                            }|
+      {2:[Quickfix List]                                             }|
+      :call setqflist(g:l1, 'r')                                  |
+    ]]
+    screen:expect(screen_l1_bot)
+
+    feed([[:call setqflist([], 'r')<CR>]])
+    screen:expect(screen_empty)
+
+    feed([[:call setqflist(g:l1, 'r')<CR>]])
+    screen:expect(screen_l1_top)
+
+    feed('<C-W>b$<C-W>t')
+    screen:expect(screen_l1_bot)
+
+    feed([[:call setqflist(g:l, 'r')<CR>]])
+    screen:expect(screen_l_top)
   end)
 
   it('works with virt_lines above and below', function()
@@ -1005,22 +1099,6 @@ describe('smoothscroll', function()
     ]])
   end)
 
-  it('works in Insert mode at bottom of window', function()
-    screen:try_resize(40, 9)
-    exec([[
-      call setline(1, repeat([repeat('A very long line ...', 10)], 5))
-      set wrap smoothscroll scrolloff=0
-    ]])
-    feed('Go123456789<CR>')
-    screen:expect([[
-      {1:<<<}ery long line ...A very long line ...|
-      A very long line ...A very long line ...|*5
-      123456789                               |
-      ^                                        |
-      {5:-- INSERT --}                            |
-    ]])
-  end)
-
   it('<<< marker shows with tabline, winbar and splits', function()
     screen:try_resize(40, 12)
     screen:set_default_attr_ids({
@@ -1085,42 +1163,125 @@ describe('smoothscroll', function()
   end)
 
   it('works with very long line', function()
-    screen:set_default_attr_ids({
-      [1] = { foreground = Screen.colors.Brown },
-      [2] = { foreground = Screen.colors.Blue1, bold = true },
-    })
     exec([[
       edit test/functional/fixtures/bigfile_oneline.txt
       setlocal smoothscroll number
     ]])
     screen:expect([[
-      {1:  1 }^0000;<control>;Cc;0;BN;;;;;N;NULL;;;|
-      {1:    }; 0001;<control>;Cc;0;BN;;;;;N;START|
-      {1:    } OF HEADING;;;; 0002;<control>;Cc;0;|
-      {1:    }BN;;;;;N;START OF TEXT;;;; 0003;<con|
-      {1:    }trol>;Cc;0;BN;;;;;N;END OF TEXT;;;; |
-      {1:    }0004;<control>;Cc;0;BN;;;;;N;END OF |
-      {1:    }TRANSMISSION;;;; 0005;<control>;Cc;0|
-      {1:    };BN;;;;;N;ENQUIRY;;;; 0006;<control>|
-      {1:    };Cc;0;BN;;;;;N;ACKNOWLEDGE;;;; 0007;|
-      {1:    }<control>;Cc;0;BN;;;;;N;BELL;;;; 000|
-      {1:    }8;<control>;Cc;0;BN;;;;;N;BACKSPACE;|
+      {8:  1 }^0000;<control>;Cc;0;BN;;;;;N;NULL;;;|
+      {8:    }; 0001;<control>;Cc;0;BN;;;;;N;START|
+      {8:    } OF HEADING;;;; 0002;<control>;Cc;0;|
+      {8:    }BN;;;;;N;START OF TEXT;;;; 0003;<con|
+      {8:    }trol>;Cc;0;BN;;;;;N;END OF TEXT;;;; |
+      {8:    }0004;<control>;Cc;0;BN;;;;;N;END OF |
+      {8:    }TRANSMISSION;;;; 0005;<control>;Cc;0|
+      {8:    };BN;;;;;N;ENQUIRY;;;; 0006;<control>|
+      {8:    };Cc;0;BN;;;;;N;ACKNOWLEDGE;;;; 0007;|
+      {8:    }<control>;Cc;0;BN;;;;;N;BELL;;;; 000|
+      {8:    }8;<control>;Cc;0;BN;;;;;N;BACKSPACE;|
                                               |
     ]])
     feed('j')
     screen:expect([[
-      {2:<<<}{1: }CJK COMPATIBILITY IDEOGRAPH-2F91F;Lo|
-      {1:    };0;L;243AB;;;;N;;;;; 2F920;CJK COMPA|
-      {1:    }TIBILITY IDEOGRAPH-2F920;Lo;0;L;7228|
-      {1:    };;;;N;;;;; 2F921;CJK COMPATIBILITY I|
-      {1:    }DEOGRAPH-2F921;Lo;0;L;7235;;;;N;;;;;|
-      {1:    } 2F922;CJK COMPATIBILITY IDEOGRAPH-2|
-      {1:    }F922;Lo;0;L;7250;;;;N;;;;;          |
-      {1:  2 }^2F923;CJK COMPATIBILITY IDEOGRAPH-2F|
-      {1:    }923;Lo;0;L;24608;;;;N;;;;;          |
-      {1:  3 }2F924;CJK COMPATIBILITY IDEOGRAPH-2F|
-      {1:    }924;Lo;0;L;7280;;;;N;;;;;           |
+      {1:<<<}{8: }CJK COMPATIBILITY IDEOGRAPH-2F91F;Lo|
+      {8:    };0;L;243AB;;;;N;;;;; 2F920;CJK COMPA|
+      {8:    }TIBILITY IDEOGRAPH-2F920;Lo;0;L;7228|
+      {8:    };;;;N;;;;; 2F921;CJK COMPATIBILITY I|
+      {8:    }DEOGRAPH-2F921;Lo;0;L;7235;;;;N;;;;;|
+      {8:    } 2F922;CJK COMPATIBILITY IDEOGRAPH-2|
+      {8:    }F922;Lo;0;L;7250;;;;N;;;;;          |
+      {8:  2 }^2F923;CJK COMPATIBILITY IDEOGRAPH-2F|
+      {8:    }923;Lo;0;L;24608;;;;N;;;;;          |
+      {8:  3 }2F924;CJK COMPATIBILITY IDEOGRAPH-2F|
+      {8:    }924;Lo;0;L;7280;;;;N;;;;;           |
                                               |
+    ]])
+  end)
+
+  it('works with very long line and scrolloff', function()
+    screen:try_resize(40, 8)
+    exec([[
+      set smoothscroll scrolloff=3
+      call setline(1, ['one', 'two long '->repeat(100), 'three', 'four', 'five', 'six'])
+    ]])
+    --FIXME: incorrect screen due to reset_skipcol()/curs_columns() shenanigans
+    feed(':norm j721|<CR>')
+    screen:expect([[
+      two long two long two long two long two |
+      long two long two long two long two long|
+       two long two long two long two long two|
+      ^ long two long two long two long two lon|
+      g two long two long two long two long tw|
+      o long two long two long two long two lo|
+      ng two long two long two long two long t|
+      :norm j721|                             |
+    ]])
+    feed('gj')
+    screen:expect([[
+      {1:<<<}two long two long two long two long t|
+      wo long two long two long two long two l|
+      ong two long two long two long two long |
+      two long two long two long two long two |
+      ^long two long two long two long two long|
+       two long two long two long two long two|
+       long two long two long two long two lon|
+      :norm j721|                             |
+    ]])
+    feed('gj')
+    screen:expect([[
+      {1:<<<}long two long two long two long two l|
+      ong two long two long two long two long |
+      two long two long two long two long two |
+      long two long two long two long two long|
+      ^ two long two long two long two long two|
+       long two long two long two long two lon|
+      g two long two long                     |
+      :norm j721|                             |
+    ]])
+    feed('gj')
+    screen:expect([[
+      {1:<<<}long two long two long two long two l|
+      ong two long two long two long two long |
+      two long two long two long two long two |
+      long two long two long two long two long|
+       two long two long two long two long two|
+      ^ long two long two long two long two lon|
+      g two long two long                     |
+      :norm j721|                             |
+    ]])
+    feed('gj')
+    screen:expect([[
+      {1:<<<}long two long two long two long two l|
+      ong two long two long two long two long |
+      two long two long two long two long two |
+      long two long two long two long two long|
+       two long two long two long two long two|
+       long two long two long two long two lon|
+      ^g two long two long                     |
+      :norm j721|                             |
+    ]])
+    feed('gj')
+    screen:expect([[
+      {1:<<<} long two long two long two long two |
+      long two long two long two long two long|
+       two long two long two long two long two|
+       long two long two long two long two lon|
+      g two long two long                     |
+      ^three                                   |
+      four                                    |
+      :norm j721|                             |
+    ]])
+    feed('gk')
+    --FIXME: incorrect screen due to reset_skipcol()/curs_columns() shenanigans
+    screen:expect([[
+      two long two long two long two long two |
+      long two long two long two long two long|
+       two long two long two long two long two|
+       long two long two long two long two lon|
+      g two long two long two long two long tw|
+      o long two long two long two long two lo|
+      ^ng two long two long two long two long t|
+      :norm j721|                             |
     ]])
   end)
 end)
