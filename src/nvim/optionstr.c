@@ -1682,6 +1682,24 @@ const char *did_set_matchpairs(optset_T *args)
   return NULL;
 }
 
+/// Process the updated 'messagesopt' option value.
+const char *did_set_messagesopt(optset_T *args FUNC_ATTR_UNUSED)
+{
+  if (messagesopt_changed() == FAIL) {
+    return e_invarg;
+  }
+  return NULL;
+}
+
+int expand_set_messagesopt(optexpand_T *args, int *numMatches, char ***matches)
+{
+  return expand_set_opt_string(args,
+                               opt_mopt_values,
+                               ARRAY_SIZE(opt_mopt_values) - 1,
+                               numMatches,
+                               matches);
+}
+
 /// The 'mkspellmem' option is changed.
 const char *did_set_mkspellmem(optset_T *args FUNC_ATTR_UNUSED)
 {
@@ -2191,7 +2209,11 @@ static const char *did_set_statustabline_rulerformat(optset_T *args, bool rulerf
     if (wid && *s == '(' && (errmsg = check_stl_option(p_ruf)) == NULL) {
       ru_wid = wid;
     } else {
-      errmsg = check_stl_option(p_ruf);
+      // Validate the flags in 'rulerformat' only if it doesn't point to
+      // a custom function ("%!" flag).
+      if ((*varp)[1] != '!') {
+        errmsg = check_stl_option(p_ruf);
+      }
     }
   } else if (rulerformat || s[0] != '%' || s[1] != '!') {
     // check 'statusline', 'winbar', 'tabline' or 'statuscolumn'
