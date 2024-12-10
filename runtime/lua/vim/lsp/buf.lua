@@ -487,7 +487,7 @@ end
 --- ```lua
 --- -- Never request typescript-language-server for formatting
 --- vim.lsp.buf.format {
----   filter = function(client) return client.name ~= "tsserver" end
+---   filter = function(client) return client.name ~= "ts_ls" end
 --- }
 --- ```
 --- @field filter? fun(client: vim.lsp.Client): boolean?
@@ -519,7 +519,7 @@ end
 --- @param opts? vim.lsp.buf.format.Opts
 function M.format(opts)
   opts = opts or {}
-  local bufnr = opts.bufnr or api.nvim_get_current_buf()
+  local bufnr = vim._resolve_bufnr(opts.bufnr)
   local mode = api.nvim_get_mode().mode
   local range = opts.range
   -- Try to use visual selection if no range is given
@@ -617,7 +617,7 @@ end
 ---@param opts? vim.lsp.buf.rename.Opts Additional options:
 function M.rename(new_name, opts)
   opts = opts or {}
-  local bufnr = opts.bufnr or api.nvim_get_current_buf()
+  local bufnr = vim._resolve_bufnr(opts.bufnr)
   local clients = lsp.get_clients({
     bufnr = bufnr,
     name = opts.name,
@@ -638,14 +638,14 @@ function M.rename(new_name, opts)
   local cword = vim.fn.expand('<cword>')
 
   --- @param range lsp.Range
-  --- @param offset_encoding string
-  local function get_text_at_range(range, offset_encoding)
+  --- @param position_encoding string
+  local function get_text_at_range(range, position_encoding)
     return api.nvim_buf_get_text(
       bufnr,
       range.start.line,
-      util._get_line_byte_from_position(bufnr, range.start, offset_encoding),
+      util._get_line_byte_from_position(bufnr, range.start, position_encoding),
       range['end'].line,
-      util._get_line_byte_from_position(bufnr, range['end'], offset_encoding),
+      util._get_line_byte_from_position(bufnr, range['end'], position_encoding),
       {}
     )[1]
   end
@@ -736,7 +736,7 @@ end
 
 --- Lists all the references to the symbol under the cursor in the quickfix window.
 ---
----@param context (table|nil) Context for the request
+---@param context lsp.ReferenceContext? Context for the request
 ---@see https://microsoft.github.io/language-server-protocol/specifications/specification-current/#textDocument_references
 ---@param opts? vim.lsp.ListOpts
 function M.references(context, opts)
