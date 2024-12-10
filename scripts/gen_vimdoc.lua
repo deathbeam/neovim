@@ -274,6 +274,7 @@ local config = {
       'diagnostic.lua',
       'codelens.lua',
       'completion.lua',
+      'folding_range.lua',
       'inlay_hint.lua',
       'tagfunc.lua',
       'semantic_tokens.lua',
@@ -514,6 +515,8 @@ local function inline_type(obj, classes)
   elseif desc == '' then
     if ty_islist then
       desc = desc .. 'A list of objects with the following fields:'
+    elseif cls.parent then
+      desc = desc .. fmt('Extends |%s| with the additional fields:', cls.parent)
     else
       desc = desc .. 'A table with the following fields:'
     end

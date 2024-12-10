@@ -95,7 +95,7 @@ describe('LSP', function()
       exec_lua(function()
         _G.lsp = require('vim.lsp')
         function _G.test__start_client()
-          return vim.lsp.start_client {
+          return vim.lsp.start({
             cmd_env = {
               NVIM_LOG_FILE = fake_lsp_logfile,
               NVIM_APPNAME = 'nvim_lsp_test',
@@ -112,7 +112,7 @@ describe('LSP', function()
                 name = 'test_folder',
               },
             },
-          }
+          }, { attach = false })
         end
         _G.TEST_CLIENT1 = _G.test__start_client()
       end)
@@ -1066,6 +1066,39 @@ describe('LSP', function()
       }
     end)
 
+    it('should forward ServerCancelled to callback', function()
+      local expected_handlers = {
+        { NIL, {}, { method = 'finish', client_id = 1 } },
+        {
+          { code = -32802 },
+          NIL,
+          { method = 'error_code_test', bufnr = 1, client_id = 1, version = 0 },
+        },
+      }
+      local client --- @type vim.lsp.Client
+      test_rpc_server {
+        test_name = 'check_forward_server_cancelled',
+        on_init = function(_client)
+          _client:request('error_code_test')
+          client = _client
+        end,
+        on_exit = function(code, signal)
+          eq(0, code, 'exit code')
+          eq(0, signal, 'exit signal')
+          eq(0, #expected_handlers, 'did not call expected handler')
+        end,
+        on_handler = function(err, _, ctx)
+          eq(table.remove(expected_handlers), { err, _, ctx }, 'expected handler')
+          if ctx.method ~= 'finish' then
+            client:notify('finish')
+          end
+          if ctx.method == 'finish' then
+            client:stop()
+          end
+        end,
+      }
+    end)
+
     it('should forward ContentModified to callback', function()
       local expected_handlers = {
         { NIL, {}, { method = 'finish', client_id = 1 } },
@@ -1089,7 +1122,6 @@ describe('LSP', function()
         end,
         on_handler = function(err, _, ctx)
           eq(table.remove(expected_handlers), { err, _, ctx }, 'expected handler')
-          -- if ctx.method == 'error_code_test' then client.notify("finish") end
           if ctx.method ~= 'finish' then
             client:notify('finish')
           end
@@ -6066,15 +6098,6 @@ describe('LSP', function()
       end
 
       eq(is_os('mac') or is_os('win'), check_registered(nil)) -- start{_client}() defaults to make_client_capabilities().
-      eq(false, check_registered(vim.empty_dict()))
-      eq(
-        false,
-        check_registered({
-          workspace = {
-            ignoreMe = true,
-          },
-        })
-      )
       eq(
         false,
         check_registered({
@@ -6094,6 +6117,90 @@ describe('LSP', function()
             },
           },
         })
+      )
+    end)
+  end)
+
+  describe('vim.lsp.config() and vim.lsp.enable()', function()
+    it('can merge settings from "*"', function()
+      eq(
+        {
+          name = 'foo',
+          cmd = { 'foo' },
+          root_markers = { '.git' },
+        },
+        exec_lua(function()
+          vim.lsp.config('*', { root_markers = { '.git' } })
+          vim.lsp.config('foo', { cmd = { 'foo' } })
+
+          return vim.lsp._resolve_config('foo')
+        end)
+      )
+    end)
+
+    it('sets up an autocmd', function()
+      eq(
+        1,
+        exec_lua(function()
+          vim.lsp.config('foo', {
+            cmd = { 'foo' },
+            root_markers = { '.foorc' },
+          })
+          vim.lsp.enable('foo')
+          return #vim.api.nvim_get_autocmds({
+            group = 'nvim.lsp.enable',
+            event = 'FileType',
+          })
+        end)
+      )
+    end)
+
+    it('attaches to buffers', function()
+      exec_lua(create_server_definition)
+
+      local tmp1 = t.tmpname(true)
+      local tmp2 = t.tmpname(true)
+
+      exec_lua(function()
+        local server = _G._create_server({
+          handlers = {
+            initialize = function(_, _, callback)
+              callback(nil, { capabilities = {} })
+            end,
+          },
+        })
+
+        vim.lsp.config('foo', {
+          cmd = server.cmd,
+          filetypes = { 'foo' },
+          root_markers = { '.foorc' },
+        })
+
+        vim.lsp.config('bar', {
+          cmd = server.cmd,
+          filetypes = { 'bar' },
+          root_markers = { '.foorc' },
+        })
+
+        vim.lsp.enable('foo')
+        vim.lsp.enable('bar')
+
+        vim.cmd.edit(tmp1)
+        vim.bo.filetype = 'foo'
+        _G.foo_buf = vim.api.nvim_get_current_buf()
+
+        vim.cmd.edit(tmp2)
+        vim.bo.filetype = 'bar'
+        _G.bar_buf = vim.api.nvim_get_current_buf()
+      end)
+
+      eq(
+        { 1, 'foo', 1, 'bar' },
+        exec_lua(function()
+          local foos = vim.lsp.get_clients({ bufnr = assert(_G.foo_buf) })
+          local bars = vim.lsp.get_clients({ bufnr = assert(_G.bar_buf) })
+          return { #foos, foos[1].name, #bars, bars[1].name }
+        end)
       )
     end)
   end)

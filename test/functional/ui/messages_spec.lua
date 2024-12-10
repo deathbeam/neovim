@@ -1112,7 +1112,7 @@ stack traceback:
     command('write ' .. fname)
     screen:expect({
       messages = {
-        { content = { { string.format('"%s" [New] 0L, 0B written', fname) } }, kind = '' },
+        { content = { { string.format('"%s" [New] 0L, 0B written', fname) } }, kind = 'bufwrite' },
       },
     })
   end)
@@ -1158,6 +1158,21 @@ stack traceback:
     })
     exec_lua([[vim.print({ foo = "bar" })]])
     screen:expect_unchanged()
+  end)
+
+  it('ruler redraw does not crash due to double grid_line_start()', function()
+    exec_lua([[
+      local ns = vim.api.nvim_create_namespace('')
+      vim.ui_attach(ns, { ext_messages = true }, function(event, ...)
+        if event == 'msg_ruler' then
+          vim.api.nvim__redraw({ flush = true })
+        end
+      end)
+      vim.o.ruler = true
+      vim.o.laststatus = 0
+    ]])
+    feed('i')
+    n.assert_alive()
   end)
 end)
 
