@@ -37,10 +37,10 @@
 -- Tests will often share a group of extra attribute sets to expect(). Those can be
 -- defined at the beginning of a test:
 --
---    screen:add_extra_attr_ids {
+--    screen:add_extra_attr_ids({
 --      [100] = { background = Screen.colors.Plum1, underline = true },
 --      [101] = { background = Screen.colors.Red1, bold = true, underline = true },
---    }
+--    })
 --
 -- To help write screen tests, see Screen:snapshot_util().
 -- To debug screen tests, see Screen:redraw_debug().
@@ -454,7 +454,7 @@ end
 ---    screen:expect(grid, [attr_ids])
 ---    screen:expect(condition)
 --- or keyword args (supports more options):
----    screen:expect{grid=[[...]], cmdline={...}, condition=function() ... end}
+---    screen:expect({ grid=[[...]], cmdline={...}, condition=function() ... end })
 ---
 --- @param expected string|function|test.function.ui.screen.Expect
 --- @param attr_ids? table<integer,table<string,any>>
@@ -967,11 +967,11 @@ function Screen:_handle_mode_info_set(cursor_style_enabled, mode_info)
   self._cursor_style_enabled = cursor_style_enabled
   for _, item in pairs(mode_info) do
     -- attr IDs are not stable, but their value should be
-    if item.attr_id ~= nil then
+    if item.attr_id ~= nil and self._attr_table[item.attr_id] ~= nil then
       item.attr = self._attr_table[item.attr_id][1]
       item.attr_id = nil
     end
-    if item.attr_id_lm ~= nil then
+    if item.attr_id_lm ~= nil and self._attr_table[item.attr_id_lm] ~= nil then
       item.attr_lm = self._attr_table[item.attr_id_lm][1]
       item.attr_id_lm = nil
     end
@@ -1713,21 +1713,24 @@ function Screen:_print_snapshot()
       end
     end
     local fn_name = modify_attrs and 'add_extra_attr_ids' or 'set_default_attr_ids'
-    attrstr = ('screen:' .. fn_name .. ' {\n' .. table.concat(attrstrs, '\n') .. '\n}\n\n')
+    attrstr = ('screen:' .. fn_name .. '({\n' .. table.concat(attrstrs, '\n') .. '\n})\n\n')
   end
 
-  local result = ('%sscreen:expect({\n  grid = [[\n  %s\n  ]]'):format(
-    attrstr,
-    kwargs.grid:gsub('\n', '\n  ')
-  )
+  local extstr = ''
   for _, k in ipairs(ext_keys) do
     if ext_state[k] ~= nil and not (k == 'win_viewport' and not self.options.ext_multigrid) then
-      result = result .. ', ' .. k .. '=' .. fmt_ext_state(k, ext_state[k])
+      extstr = extstr .. '\n  ' .. k .. ' = ' .. fmt_ext_state(k, ext_state[k]) .. ','
     end
   end
-  result = result .. '\n})'
 
-  return result
+  return ('%sscreen:expect(%s%s%s%s%s'):format(
+    attrstr,
+    #extstr > 0 and '{\n  grid = [[\n  ' or '[[\n',
+    #extstr > 0 and kwargs.grid:gsub('\n', '\n  ') or kwargs.grid,
+    #extstr > 0 and '\n  ]],' or '\n]]',
+    extstr,
+    #extstr > 0 and '\n})' or ')'
+  )
 end
 
 function Screen:print_snapshot()

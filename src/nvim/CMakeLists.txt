@@ -556,7 +556,7 @@ foreach(sfile ${NVIM_SOURCES}
     set(PREPROC_OUTPUT -w -E -o ${gf_i})
   endif()
 
-  set(depends "${HEADER_GENERATOR}" "${sfile}" "${LUA_GEN_DEPS}")
+  set(depends "${HEADER_GENERATOR}" "${sfile}" "${LUA_GEN_DEPS}" "${GENERATOR_C_GRAMMAR}")
   if("${f}" STREQUAL "version.c")
     # Ensure auto/versiondef_git.h exists after "make clean".
     list(APPEND depends update_version_stamp "${NVIM_VERSION_GIT_H}" "${NVIM_VERSION_DEF_H}")
@@ -826,6 +826,7 @@ target_link_libraries(libnvim PRIVATE main_lib PUBLIC libuv)
 #-------------------------------------------------------------------------------
 
 find_program(CLANG_TIDY_PRG clang-tidy)
+mark_as_advanced(CLANG_TIDY_PRG)
 set(EXCLUDE_CLANG_TIDY typval_encode.c.h ui_events.in.h)
 if(WIN32)
   list(APPEND EXCLUDE_CLANG_TIDY

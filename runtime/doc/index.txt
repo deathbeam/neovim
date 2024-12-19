@@ -1472,6 +1472,7 @@ tag		command		action ~
 |:ownsyntax|	:ow[nsyntax]	set new local syntax highlight for this window
 |:packadd|	:pa[ckadd]	add a plugin from 'packpath'
 |:packloadall|	:packl[oadall]	load all packages under 'packpath'
+|:pbuffer|	:pb[uffer]	edit buffer in the preview window
 |:pclose|	:pc[lose]	close preview window
 |:pedit|	:ped[it]	edit file in the preview window
 |:perl|		:pe[rl]		execute perl command
@@ -1569,6 +1570,8 @@ tag		command		action ~
 |:sign|		:sig[n]		manipulate signs
 |:silent|	:sil[ent]	run a command silently
 |:sleep|	:sl[eep]	do nothing for a few seconds
+|:sleep!|	:sl[eep]!	do nothing for a few seconds, without the
+				cursor visible
 |:slast|	:sla[st]	split window and go to last file in the
 				argument list
 |:smagic|	:sm[agic]	:substitute with 'magic'

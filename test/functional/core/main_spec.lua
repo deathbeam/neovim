@@ -103,7 +103,8 @@ describe('command-line option', function()
 
       -- Need to explicitly pipe to stdin so that the embedded Nvim instance doesn't try to read
       -- data from the terminal #18181
-      fn.termopen(string.format([[echo "" | %s]], table.concat(args, ' ')), {
+      fn.jobstart(string.format([[echo "" | %s]], table.concat(args, ' ')), {
+        term = true,
         env = { VIMRUNTIME = os.getenv('VIMRUNTIME') },
       })
       screen:expect(
@@ -120,7 +121,7 @@ describe('command-line option', function()
       feed('i:cq<CR>')
       screen:expect([[
                                                 |
-        [Process exited 1]{2: }                     |
+        [Process exited 1]^                      |
                                                 |*5
         {5:-- TERMINAL --}                          |
       ]])
@@ -188,9 +189,9 @@ describe('command-line option', function()
 
   it('nvim -v, :version', function()
     matches('Run ":verbose version"', fn.execute(':version'))
-    matches('Compilation: .*Run :checkhealth', fn.execute(':verbose version'))
+    matches('fall%-back for %$VIM: .*Run :checkhealth', fn.execute(':verbose version'))
     matches('Run "nvim %-V1 %-v"', fn.system({ nvim_prog_abs(), '-v' }))
-    matches('Compilation: .*Run :checkhealth', fn.system({ nvim_prog_abs(), '-V1', '-v' }))
+    matches('fall%-back for %$VIM: .*Run :checkhealth', fn.system({ nvim_prog_abs(), '-V1', '-v' }))
   end)
 
   if is_os('win') then
