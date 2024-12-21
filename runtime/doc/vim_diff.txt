@@ -39,7 +39,6 @@ Defaults                                                    *nvim-defaults*
 - 'autoindent' is enabled
 - 'autoread' is enabled (works in all UIs, including terminal)
 - 'background' defaults to "dark" (unless set automatically by the terminal/UI)
-- 'backspace' defaults to "indent,eol,start"
 - 'backupdir' defaults to .,~/.local/state/nvim/backup// (|xdg|), auto-created
 - 'belloff' defaults to "all"
 - 'comments' includes "fb:•"
@@ -187,6 +186,10 @@ nvim_terminal:
     - 'textwidth' set to 0
     - 'nowrap'
     - 'nolist'
+    - 'nonumber'
+    - 'norelativenumber'
+    - 'signcolumn' set to "no"
+    - 'foldcolumn' set to "0"
     - 'winhighlight' uses |hl-StatusLineTerm| and |hl-StatusLineTermNC| in
       place of |hl-StatusLine| and |hl-StatusLineNC|
 
@@ -322,7 +325,6 @@ Highlight groups:
 - |hl-MsgSeparator| highlights separator for scrolled messages
 - |hl-Substitute|
 - |hl-TermCursor|
-- |hl-TermCursorNC|
 - |hl-WinSeparator| highlights window separators
 - |hl-Whitespace| highlights 'listchars' whitespace
 - |hl-WinBar| highlights 'winbar'
@@ -667,7 +669,6 @@ Commands:
 - :promptrepl
 - :scriptversion (always version 1)
 - :shell
-- :sleep! (does not hide the cursor; same as :sleep)
 - :smile
 - :tearoff
 - :cstag
@@ -687,7 +688,7 @@ Cscope:
   https://github.com/dhananjaylatkar/cscope_maps.nvim
 
 Eval:
-- Vim9script
+- *Vim9script* (the Vim 9+ flavor of Vimscript) is not supported.
 - *cscope_connection()*
 - *err_teapot()*
 - *js_encode()*

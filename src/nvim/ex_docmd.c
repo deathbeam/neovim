@@ -4502,6 +4502,12 @@ static void ex_bunload(exarg_T *eap)
 /// :[N]sbuffer [N]      to buffer N
 static void ex_buffer(exarg_T *eap)
 {
+  do_exbuffer(eap);
+}
+
+/// ":buffer" command and alike.
+static void do_exbuffer(exarg_T *eap)
+{
   if (*eap->arg) {
     eap->errmsg = ex_errmsg(e_trailing_arg, eap->arg);
   } else {
@@ -6101,12 +6107,20 @@ static void ex_sleep(exarg_T *eap)
   default:
     semsg(_(e_invarg2), eap->arg); return;
   }
-  do_sleep(len);
+
+  // Hide the cursor if invoked with !
+  do_sleep(len, eap->forceit);
 }
 
 /// Sleep for "msec" milliseconds, but return early on CTRL-C.
-void do_sleep(int64_t msec)
+///
+/// @param hide_cursor  hide the cursor if true
+void do_sleep(int64_t msec, bool hide_cursor)
 {
+  if (hide_cursor) {
+    ui_busy_start();
+  }
+
   ui_flush();  // flush before waiting
   LOOP_PROCESS_EVENTS_UNTIL(&main_loop, main_loop.events, msec, got_int);
 
@@ -6114,6 +6128,10 @@ void do_sleep(int64_t msec)
   // input buffer, otherwise a following call to input() fails.
   if (got_int) {
     vpeekc();
+  }
+
+  if (hide_cursor) {
+    ui_busy_stop();
   }
 }
 
@@ -6990,14 +7008,35 @@ static void ex_ptag(exarg_T *eap)
 static void ex_pedit(exarg_T *eap)
 {
   win_T *curwin_save = curwin;
-
-  // Open the preview window or popup and make it the current window.
-  g_do_tagpreview = (int)p_pvh;
-  prepare_tagpreview(true);
+  prepare_preview_window();
 
   // Edit the file.
   do_exedit(eap, NULL);
 
+  back_to_current_window(curwin_save);
+}
+
+/// ":pbuffer"
+static void ex_pbuffer(exarg_T *eap)
+{
+  win_T *curwin_save = curwin;
+  prepare_preview_window();
+
+  // Go to the buffer.
+  do_exbuffer(eap);
+
+  back_to_current_window(curwin_save);
+}
+
+static void prepare_preview_window(void)
+{
+  // Open the preview window or popup and make it the current window.
+  g_do_tagpreview = (int)p_pvh;
+  prepare_tagpreview(true);
+}
+
+static void back_to_current_window(win_T *curwin_save)
+{
   if (curwin != curwin_save && win_valid(curwin_save)) {
     // Return cursor to where we were
     validate_cursor(curwin);
@@ -7736,7 +7775,7 @@ static void ex_terminal(exarg_T *eap)
   if (*eap->arg != NUL) {  // Run {cmd} in 'shell'.
     char *name = vim_strsave_escaped(eap->arg, "\"\\");
     snprintf(ex_cmd + len, sizeof(ex_cmd) - len,
-             " | call termopen(\"%s\")", name);
+             " | call jobstart(\"%s\",{'term':v:true})", name);
     xfree(name);
   } else {  // No {cmd}: run the job with tokenized 'shell'.
     if (*p_sh == NUL) {
@@ -7759,7 +7798,7 @@ static void ex_terminal(exarg_T *eap)
     shell_free_argv(argv);
 
     snprintf(ex_cmd + len, sizeof(ex_cmd) - len,
-             " | call termopen([%s])", shell_argv + 1);
+             " | call jobstart([%s], {'term':v:true})", shell_argv + 1);
   }
 
   do_cmdline_cmd(ex_cmd);

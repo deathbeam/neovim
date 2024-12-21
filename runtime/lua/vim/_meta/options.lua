@@ -1086,9 +1086,9 @@ vim.go.cia = vim.go.completeitemalign
 --- 	    a match from the menu. Only works in combination with
 --- 	    "menu" or "menuone". No effect if "longest" is present.
 ---
----    noselect Do not select a match in the menu, force the user to
---- 	    select one from the menu. Only works in combination with
---- 	    "menu" or "menuone".
+---    noselect Same as "noinsert", except that no menu item is
+--- 	    pre-selected. If both "noinsert" and "noselect" are present,
+--- 	    "noselect" has precedence.
 ---
 ---    fuzzy    Enable `fuzzy-matching` for completion candidates. This
 --- 	    allows for more flexible and intuitive matching, where
@@ -2783,6 +2783,7 @@ vim.go.gp = vim.go.grepprg
 --- 	ci	Command-line Insert mode
 --- 	cr	Command-line Replace mode
 --- 	sm	showmatch in Insert mode
+--- 	t	Terminal mode
 --- 	a	all modes
 --- The argument-list is a dash separated list of these arguments:
 --- 	hor{N}	horizontal bar, {N} percent of the character height
@@ -2802,7 +2803,8 @@ vim.go.gp = vim.go.grepprg
 --- ```vim
 --- 			set guicursor=n:blinkon0
 --- ```
---- - Default is "blinkon0" for each mode.
+---
+--- 		Default is "blinkon0" for each mode.
 --- 	{group-name}
 --- 		Highlight group that decides the color and font of the
 --- 		cursor.
@@ -2848,7 +2850,7 @@ vim.go.gp = vim.go.grepprg
 ---
 ---
 --- @type string
-vim.o.guicursor = "n-v-c-sm:block,i-ci-ve:ver25,r-cr-o:hor20"
+vim.o.guicursor = "n-v-c-sm:block,i-ci-ve:ver25,r-cr-o:hor20,t:block-blinkon500-blinkoff500-TermCursor"
 vim.o.gcr = vim.o.guicursor
 vim.go.guicursor = vim.o.guicursor
 vim.go.gcr = vim.go.guicursor
@@ -3016,7 +3018,7 @@ vim.go.hid = vim.go.hidden
 
 --- A history of ":" commands, and a history of previous search patterns
 --- is remembered.  This option decides how many entries may be stored in
---- each of these histories (see `cmdline-editing` and 'msghistory' for
+--- each of these histories (see `cmdline-editing` and 'messagesopt' for
 --- the number of messages to remember).
 --- The maximum value is 10000.
 ---
@@ -4084,6 +4086,31 @@ vim.o.mis = vim.o.menuitems
 vim.go.menuitems = vim.o.menuitems
 vim.go.mis = vim.go.menuitems
 
+--- Option settings for outputting messages.  It can consist of the
+--- following items.  Items must be separated by a comma.
+---
+--- hit-enter	Use a `hit-enter` prompt when the message is longer than
+--- 		'cmdheight' size.
+---
+--- wait:{n}	Instead of using a `hit-enter` prompt, simply wait for
+--- 		{n} milliseconds so that the user has a chance to read
+--- 		the message.  The maximum value of {n} is 10000.  Use
+--- 		0 to disable the wait (but then the user may miss an
+--- 		important message).
+--- 		This item is ignored when "hit-enter" is present, but
+--- 		required when "hit-enter" is not present.
+---
+--- history:{n}	Determines how many entries are remembered in the
+--- 		`:messages` history.  The maximum value is 10000.
+--- 		Setting it to zero clears the message history.
+--- 		This item must always be present.
+---
+--- @type string
+vim.o.messagesopt = "hit-enter,history:500"
+vim.o.mopt = vim.o.messagesopt
+vim.go.messagesopt = vim.o.messagesopt
+vim.go.mopt = vim.go.messagesopt
+
 --- Parameters for `:mkspell`.  This tunes when to start compressing the
 --- word tree.  Compression can be slow when there are many words, but
 --- it's needed to avoid running out of memory.  The amount of memory used
@@ -4378,15 +4405,6 @@ vim.o.mousetime = 500
 vim.o.mouset = vim.o.mousetime
 vim.go.mousetime = vim.o.mousetime
 vim.go.mouset = vim.go.mousetime
-
---- Determines how many entries are remembered in the `:messages` history.
---- The maximum value is 10000.
----
---- @type integer
-vim.o.msghistory = 500
-vim.o.mhi = vim.o.msghistory
-vim.go.msghistory = vim.o.msghistory
-vim.go.mhi = vim.go.msghistory
 
 --- This defines what bases Vim will consider for numbers when using the
 --- CTRL-A and CTRL-X commands for adding to and subtracting from a number
@@ -4994,6 +5012,7 @@ vim.go.ruf = vim.go.rulerformat
 ---   indent/	indent scripts `indent-expression`
 ---   keymap/	key mapping files `mbyte-keymap`
 ---   lang/		menu translations `:menutrans`
+---   lsp/		LSP client configurations `lsp-config`
 ---   lua/		`Lua` plugins
 ---   menu.vim	GUI menus `menu.vim`
 ---   pack/		packages `:packadd`
@@ -5197,6 +5216,8 @@ vim.go.sect = vim.go.sections
 --- selection.
 --- When "old" is used and 'virtualedit' allows the cursor to move past
 --- the end of line the line break still isn't included.
+--- When "exclusive" is used, cursor position in visual mode will be
+--- adjusted for inclusive motions `inclusive-motion-selection-exclusive`.
 --- Note that when "exclusive" is used and selecting from the end
 --- backwards, you cannot include the last character of a line, when
 --- starting in Normal mode and 'virtualedit' empty.
@@ -6310,6 +6331,7 @@ vim.wo.stc = vim.wo.statuscolumn
 --- All fields except the {item} are optional.  A single percent sign can
 --- be given as "%%".
 ---
+--- 						*stl-%!*
 --- When the option starts with "%!" then it is used as an expression,
 --- evaluated and the result is used as the option value.  Example:
 ---

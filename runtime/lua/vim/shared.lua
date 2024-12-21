@@ -737,6 +737,51 @@ function vim.list_slice(list, start, finish)
   return new_list
 end
 
+--- Efficiently insert items into the middle of a list.
+---
+--- Calling table.insert() in a loop will re-index the tail of the table on
+--- every iteration, instead this function will re-index  the table exactly
+--- once.
+---
+--- Based on https://stackoverflow.com/questions/12394841/safely-remove-items-from-an-array-table-while-iterating/53038524#53038524
+---
+---@param t any[]
+---@param first integer
+---@param last integer
+---@param v any
+function vim._list_insert(t, first, last, v)
+  local n = #t
+
+  -- Shift table forward
+  for i = n - first, 0, -1 do
+    t[last + 1 + i] = t[first + i]
+  end
+
+  -- Fill in new values
+  for i = first, last do
+    t[i] = v
+  end
+end
+
+--- Efficiently remove items from middle of a list.
+---
+--- Calling table.remove() in a loop will re-index the tail of the table on
+--- every iteration, instead this function will re-index  the table exactly
+--- once.
+---
+--- Based on https://stackoverflow.com/questions/12394841/safely-remove-items-from-an-array-table-while-iterating/53038524#53038524
+---
+---@param t any[]
+---@param first integer
+---@param last integer
+function vim._list_remove(t, first, last)
+  local n = #t
+  for i = 0, n - first do
+    t[first + i] = t[last + 1 + i]
+    t[last + 1 + i] = nil
+  end
+end
+
 --- Trim whitespace (Lua pattern "%s") from both sides of a string.
 ---
 ---@see |lua-patterns|
@@ -968,7 +1013,7 @@ do
   --- best performance.
   ---
   --- @param name string Argument name
-  --- @param value string Argument value
+  --- @param value any Argument value
   --- @param validator vim.validate.Validator
   ---   - (`string|string[]`): Any value that can be returned from |lua-type()| in addition to
   ---     `'callable'`: `'boolean'`, `'callable'`, `'function'`, `'nil'`, `'number'`, `'string'`, `'table'`,
@@ -1352,6 +1397,26 @@ function vim._with(context, f)
   end
 
   return vim._with_c(context, callback)
+end
+
+--- @param bufnr? integer
+--- @return integer
+function vim._resolve_bufnr(bufnr)
+  if bufnr == nil or bufnr == 0 then
+    return vim.api.nvim_get_current_buf()
+  end
+  vim.validate('bufnr', bufnr, 'number')
+  return bufnr
+end
+
+--- @generic T
+--- @param x elem_or_list<T>?
+--- @return T[]
+function vim._ensure_list(x)
+  if type(x) == 'table' then
+    return x
+  end
+  return { x }
 end
 
 return vim

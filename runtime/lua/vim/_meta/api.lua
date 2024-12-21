@@ -272,12 +272,12 @@ function vim.api.nvim_buf_attach(buffer, send_buffer, opts) end
 --- This temporarily switches current buffer to "buffer".
 --- If the current window already shows "buffer", the window is not switched.
 --- If a window inside the current tabpage (including a float) already shows the
---- buffer, then one of these windows will be set as current window temporarily.
+--- buffer, then one of those windows will be set as current window temporarily.
 --- Otherwise a temporary scratch window (called the "autocmd window" for
 --- historical reasons) will be used.
 ---
 --- This is useful e.g. to call Vimscript functions that only work with the
---- current buffer/window currently, like `termopen()`.
+--- current buffer/window currently, like `jobstart(…, {'term': v:true})`.
 ---
 --- @param buffer integer Buffer handle, or 0 for current buffer
 --- @param fun function Function to call inside the buffer (currently Lua callable
@@ -885,10 +885,8 @@ function vim.api.nvim_cmd(cmd, opts) end
 ---
 --- On execution error: fails with Vimscript error, updates v:errmsg.
 ---
---- Prefer using `nvim_cmd()` or `nvim_exec2()` over this. To evaluate multiple lines of Vim script
---- or an Ex command directly, use `nvim_exec2()`. To construct an Ex command using a structured
---- format and then execute it, use `nvim_cmd()`. To modify an Ex command before evaluating it, use
---- `nvim_parse_cmd()` in conjunction with `nvim_cmd()`.
+--- Prefer `nvim_cmd()` or `nvim_exec2()` instead. To modify an Ex command in a structured way
+--- before executing it, modify the result of `nvim_parse_cmd()` then pass it to `nvim_cmd()`.
 ---
 --- @param command string Ex command string
 function vim.api.nvim_command(command) end
@@ -963,9 +961,9 @@ function vim.api.nvim_create_augroup(name, opts) end
 ---     - id: (number) autocommand id
 ---     - event: (string) name of the triggered event `autocmd-events`
 ---     - group: (number|nil) autocommand group id, if any
----     - match: (string) expanded value of [<amatch>]
----     - buf: (number) expanded value of [<abuf>]
----     - file: (string) expanded value of [<afile>]
+---     - file: (string) [<afile>] (not expanded to a full path)
+---     - match: (string) [<amatch>] (expanded to a full path)
+---     - buf: (number) [<abuf>]
 ---     - data: (any) arbitrary data passed from [nvim_exec_autocmds()] [event-data]()
 --- - command (string) optional: Vim command to execute on event. Cannot be used with
 --- {callback}
@@ -1012,7 +1010,7 @@ function vim.api.nvim_create_namespace(name) end
 --- ```
 ---
 --- @param name string Name of the new user command. Must begin with an uppercase letter.
---- @param command any Replacement command to execute when this user command is executed. When called
+--- @param command string|fun(args: vim.api.keyset.create_user_command.command_args) Replacement command to execute when this user command is executed. When called
 --- from Lua, the command can also be a Lua function. The function is called with a
 --- single table argument that contains the following keys:
 --- - name: (string) Command name
@@ -1654,7 +1652,7 @@ function vim.api.nvim_notify(msg, log_level, opts) end
 --- Open a terminal instance in a buffer
 ---
 --- By default (and currently the only option) the terminal will not be
---- connected to an external process. Instead, input send on the channel
+--- connected to an external process. Instead, input sent on the channel
 --- will be echoed directly by the terminal. This is useful to display
 --- ANSI terminal sequences returned as part of a rpc message, or similar.
 ---
@@ -1664,6 +1662,18 @@ function vim.api.nvim_notify(msg, log_level, opts) end
 --- then display it using `nvim_open_win()`, and then  call this function.
 --- Then `nvim_chan_send()` can be called immediately to process sequences
 --- in a virtual terminal having the intended size.
+---
+--- Example: this `TermHl` command can be used to display and highlight raw ANSI termcodes, so you
+--- can use Nvim as a "scrollback pager" (for terminals like kitty): [terminal-scrollback-pager]()
+---
+--- ```lua
+--- vim.api.nvim_create_user_command('TermHl', function()
+---   local b = vim.api.nvim_create_buf(false, true)
+---   local chan = vim.api.nvim_open_term(b, {})
+---   vim.api.nvim_chan_send(chan, table.concat(vim.api.nvim_buf_get_lines(0, 0, -1, false), '\n'))
+---   vim.api.nvim_win_set_buf(0, b)
+--- end, { desc = 'Highlights ANSI termcodes in curbuf' })
+--- ```
 ---
 --- @param buffer integer the buffer to use (expected to be empty)
 --- @param opts vim.api.keyset.open_term Optional parameters.
@@ -2124,8 +2134,8 @@ function vim.api.nvim_set_current_win(window) end
 ---   ```
 ---     ["start", tick]
 ---   ```
---- - on_buf: called for each buffer being redrawn (before
----   window callbacks)
+--- - on_buf: called for each buffer being redrawn (once per edit,
+---   before window callbacks)
 ---   ```
 ---     ["buf", bufnr, tick]
 ---   ```

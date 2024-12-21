@@ -550,7 +550,7 @@ local function on_complete_done()
     return
   end
 
-  local offset_encoding = client.offset_encoding or 'utf-16'
+  local position_encoding = client.offset_encoding or 'utf-16'
   local resolve_provider = (client.server_capabilities.completionProvider or {}).resolveProvider
 
   local function clear_word()
@@ -576,7 +576,7 @@ local function on_complete_done()
 
   if completion_item.additionalTextEdits and next(completion_item.additionalTextEdits) then
     clear_word()
-    lsp.util.apply_text_edits(completion_item.additionalTextEdits, bufnr, offset_encoding)
+    lsp.util.apply_text_edits(completion_item.additionalTextEdits, bufnr, position_encoding)
     apply_snippet_and_command()
   elseif resolve_provider and type(completion_item) == 'table' then
     local changedtick = vim.b[bufnr].changedtick
@@ -591,7 +591,7 @@ local function on_complete_done()
       if err then
         vim.notify_once(err.message, vim.log.levels.WARN)
       elseif result and result.additionalTextEdits then
-        lsp.util.apply_text_edits(result.additionalTextEdits, bufnr, offset_encoding)
+        lsp.util.apply_text_edits(result.additionalTextEdits, bufnr, position_encoding)
         if result.command then
           completion_item.command = result.command
         end
@@ -716,7 +716,7 @@ end
 --- @param bufnr integer Buffer handle, or 0 for the current buffer
 --- @param opts? vim.lsp.completion.BufferOpts
 function M.enable(enable, client_id, bufnr, opts)
-  bufnr = (bufnr == 0 and api.nvim_get_current_buf()) or bufnr
+  bufnr = vim._resolve_bufnr(bufnr)
 
   if enable then
     enable_completions(client_id, bufnr, opts or {})
